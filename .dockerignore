@@ -1,0 +1,7 @@
+.git
+.env
+.env.*
+.env *
+*.authinfo
+node_modules
+upload

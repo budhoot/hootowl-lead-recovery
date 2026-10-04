@@ -1,0 +1,43 @@
+{
+  "name": "hootowl-lead-recovery",
+  "version": "1.0.0",
+  "description": "HootOwl Lead Recovery backend",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:migrate": "node scripts/migrate.js",
+    "test": "node node_modules/jest/bin/jest.js --runInBand",
+    "test:watch": "jest --watch",
+    "worker": "node src/worker.js",
+    "test:mvp": "node --test test/mvp.node.cjs"
+  },
+  "keywords": [
+    "hootowl",
+    "lead-recovery",
+    "wix",
+    "twilio",
+    "crm"
+  ],
+  "author": "HootOwl",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "libphonenumber-js": "^1.12.24",
+    "morgan": "^1.10.1",
+    "pg": "^8.16.3",
+    "twilio": "^5.10.2",
+    "winston": "^3.18.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.4"
+  }
+}
