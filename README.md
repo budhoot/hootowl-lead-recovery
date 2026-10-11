@@ -1,22 +1,20 @@
-# HootOwl Lead Rescue — backend MVP
+# HootOwl Lead Recovery — voice answering MVP
 
-This Node.js/PostgreSQL API forwards incoming Twilio calls to a business, queues a recovery text for unanswered/busy/failed calls, stores caller replies, and provides an operator API. It supports multiple businesses in one installation.
+This Node.js/PostgreSQL service answers the Nocona Hills Repair & Replace line with an AI voice agent, records the call, and can book a visit by voice. SMS sending and inbound SMS handling are disabled.
 
 ## Start here (Windows PowerShell)
 
 1. Install Node.js 22 LTS and PostgreSQL. Create a database named `hootowl` and a database user/password.
-2. Extract this ZIP. Open PowerShell inside its `HootOwl-Lead_Recovery` folder.
-3. Run `npm ci`. The ZIP intentionally excludes installed dependencies and your private credentials.
+2. Open PowerShell in the project folder.
+3. Run `npm ci`. The repository excludes installed dependencies and private credentials.
 4. Run `Copy-Item .env.example .env`. Edit `.env` with your PostgreSQL connection string and Twilio credentials. Set `TWILIO_PUBLIC_BASE_URL` to the exact HTTPS origin of your API, with no path. Generate the admin key with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and paste it into `.env`.
 5. Run `npm run db:migrate`, then `npm start`.
-6. In a SECOND PowerShell window in the same folder, run `npm run worker`. Both processes must remain running. Use a service manager or two hosting services for continuous operation.
-7. Check `http://localhost:3000/health`. This proves the API process is running; it does not verify database/Twilio connectivity.
+6. Do not run `npm run worker`; the legacy recovery SMS worker is disabled.
+7. Check `http://localhost:3000/health` (or the port set in `PORT`) for process liveness and `/ready` for database readiness.
 
 ## Twilio configuration
 
-Use an SMS-capable Twilio number per client. Configure its incoming voice webhook as POST to `https://YOUR-API/webhooks/twilio/voice`. Configure incoming SMS as POST to `/webhooks/twilio/sms`. The worker sets `/webhooks/twilio/sms-status` for delivery updates. All Twilio routes require valid Twilio signatures; unsigned browser/curl calls are rejected.
-
-Configure Twilio Advanced Opt-Out confirmations for STOP, START and HELP; this backend stores opt-outs and leaves confirmations to Twilio. Complete the applicable Twilio messaging onboarding before enabling client recovery. Recovery defaults to disabled; enable it only when the business has approved its messaging use and configuration. Test with a controlled phone before taking clients live. The business phone rings for about 20 seconds (`DIAL_TIMEOUT_SECONDS=15` plus Twilio's roughly 5-second buffer) so the call normally ends before carrier voicemail picks up. If voicemail does answer first (phone off, Do Not Disturb, call declined), Twilio counts the call as answered and no text is sent; this MVP does not detect voicemail.
+Configure the Twilio number's incoming Voice webhook as `POST https://YOUR-API/webhooks/twilio/voice`. Do not configure or use an SMS webhook. Incoming Twilio webhooks and the ConversationRelay WebSocket handshake require valid Twilio signatures. The voice agent WebSocket is served at `wss://YOUR-API/webhooks/twilio/agent`.
 
 ## Register your first client
 
@@ -29,24 +27,51 @@ $body = @{
  twilio_number = "+18005550100"
  destination_number = "+14155550123"
  booking_url = "https://your-existing-booking-page.example"
- recovery_enabled = $false
+ intake_enabled = $true
 } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://localhost:3000/admin/clients" -Headers $headers -ContentType "application/json" -Body $body
 ```
 
-Save the returned client and route IDs. List routes with GET `/admin/clients`. Enable recovery with PATCH `/admin/phone-numbers/ROUTE_ID`, JSON `{"is_active":true,"recovery_enabled":true}` and the same Authorization header. Disable with `recovery_enabled:false`. Obtain recent missed calls and replies with GET `/admin/leads?client_id=CLIENT_ID`. This is a global operator API, not a customer login portal; keep the admin key private and never place it in Wix/browser code. API responses are limited to the latest 200 records per category.
+Save the returned client and route IDs. List routes with GET `/admin/clients`. AI voice answering can be enabled with PATCH `/admin/phone-numbers/ROUTE_ID`, JSON `{"is_active":true,"intake_enabled":true}` and the same Authorization header. This is a global operator API, not a customer login portal; keep the admin key private and never place it in Wix/browser code. Legacy missed-call and text records remain available for audit, but SMS is disabled.
 
-## What happens after a missed call
+## AI voice answering and call recording
 
-The callback inserts the missed call and its queued text in one SQL statement. Repeated callbacks for the same CallSid do not add messages. The worker sends the business name, a request for the caller's name and needs, optional booking link, and STOP instructions. It suppresses disabled routes, opted-out callers and repeat recovery attempts within 24 hours. Replies appear in the operator inbox for human follow-up. A booking link requests an appointment through your existing scheduling service; the backend does not create calendar appointments or run an AI conversation.
+The service uses Twilio ConversationRelay for live speech recognition and spoken responses. The first TwiML verb is a six-second `<Pause>`, which delays pickup; the call is then recorded in dual-channel mode and ConversationRelay plays: “How may Nocona Hills Repair & Replace help you today?” Twilio documents that an initial `<Pause>` delays pickup. Ring cadence varies by carrier, so six seconds approximates the second ring but cannot guarantee the same ring count on every network. See [Twilio’s `<Pause>` reference](https://www.twilio.com/docs/voice/twiml/pause).
+
+The AI can collect the caller's name, requested service, full street address, and issue details, validate the address against the Nocona Hills boundary, check Google Calendar, and book a 60-minute visit after the caller clearly confirms a time. The existing 10-minute travel buffer and 15-minute slot increments apply. It prioritizes visit starts within an hour of the call when possible and otherwise offers later openings. It confirms the booking verbally. The service does not send or respond to SMS. If anyone may be in immediate danger, the AI is instructed to tell them to call 911.
+
+### Trial configuration
+
+1. In `.env`, set `TRIAL_TWILIO_NUMBER=+19403405234`, `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the exact public HTTPS origin in `TWILIO_PUBLIC_BASE_URL`. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Keep all keys and tokens in `.env` or a production secret manager; do not commit them.
+2. In Twilio Console, complete ConversationRelay onboarding and accept its applicable AI/ML terms. Configure the number's Voice webhook to `POST https://YOUR-API/webhooks/twilio/voice`. Leave incoming SMS unconfigured. The API provides the secure relay endpoint at `wss://YOUR-API/webhooks/twilio/agent`.
+3. Enable the Google Calendar API and Google Maps Geocoding API in a Google Cloud project. Configure a server-side OAuth client and refresh token authorized with `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar.events.freebusy` scopes. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, and `GOOGLE_CALENDAR_ID` (usually `primary`). Restrict `GOOGLE_MAPS_API_KEY` to the Geocoding API and the server's allowed IPs where possible.
+4. Run `npm run db:migrate`, then register the intake-only route:
+
+   ```powershell
+   $headers = @{ Authorization = "Bearer $env:ADMIN_API_KEY" }
+   $body = @{
+     name = "Nocona Hills Repair & Replace"
+     twilio_number = "+19403405234"
+     intake_enabled = $true
+   } | ConvertTo-Json
+   Invoke-RestMethod -Method Post -Uri "https://YOUR-API/admin/clients" -Headers $headers -ContentType "application/json" -Body $body
+   ```
+
+   The route does not require or dial a forwarding destination. Store the returned client and route IDs for operator follow-up.
+
+5. Test with a controlled phone: verify the exact greeting, recording completion in Twilio, rejection of an out-of-area address, calendar slot selection, and verbal booking confirmation. Recording metadata and the Twilio recording URL are stored in `voice_agent_sessions`; listen to recordings in the Twilio Console and restrict access there.
+
+The user selected no recording announcement. Recording-notice and consent rules vary by caller location; verify applicable requirements before live use. Audio remains in Twilio. This service stores recording metadata but does not persist caller transcripts.
+
+## Legacy recovery data
+
+Older recovery tables and message records remain for historical compatibility, but no inbound SMS endpoint is mounted and the recovery worker cannot send messages. These legacy records are not used by the voice agent.
 
 ## Recovery and operations
 
-The API can accept missed calls while the worker is offline; pending messages persist in PostgreSQL. Multiple workers claim jobs with row locks. Sending is persisted before calling Twilio. If a send fails or times out, the message is flagged `review` and is NOT retried automatically: Twilio may already have accepted it. A process crash can leave `sending` rows. Inspect `sending` older than 5 minutes and `review` rows in PostgreSQL, compare Twilio logs, and resolve them manually. Never requeue a message until you establish it was not accepted. This favors avoiding duplicate texts over guaranteed delivery. Existing missed-call rows are not automatically backfilled with texts.
+Provider/database failures and live telephone behavior require staging verification. This service does not send messages, including legacy recovery messages.
 
-Status callbacks update a matched message SID. A callback arriving before the worker saves the SID can be missed; reconcile its final status with Twilio logs. Provider/database failures and live telephone behavior require staging verification.
-
-Use HTTPS, restricted database access, backups and controlled access to lead data. No credentials are included. Dockerfile runs the API as a non-root user; use the same image with `node src/worker.js` for the worker and run migrations separately before starting services. The old Python import check and empty legacy Docker file are not the app entry point.
+Use HTTPS, restricted database access, backups and controlled access to caller data and recordings. No credentials are included. The Dockerfile runs the API as a non-root user; run migrations separately before starting the service. The old Python import check and empty legacy Docker file are not the app entry point.
 
 ## Validation
 

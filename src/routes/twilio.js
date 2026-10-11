@@ -1,6 +1,7 @@
 const express = require('express');
 const twilio = require('twilio');
 const db = require('../db');
+const voiceAgent = require('../voice-agent');
 
 const router = express.Router();
 const missedCallStatuses = new Set(['no-answer', 'busy', 'failed']);
@@ -61,17 +62,23 @@ function sendTwiML(res, response) {
   return res.type('text/xml').send(response.toString());
 }
 
+function callbackUrl(path) {
+  const baseUrl = process.env.TWILIO_PUBLIC_BASE_URL;
+  if (!baseUrl) throw new Error('TWILIO_PUBLIC_BASE_URL is not configured.');
+  return new URL(path, baseUrl).toString();
+}
+
 router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
-  const { From: callerNumber, To: twilioNumber } = req.body;
+  const { From: callerNumber, To: twilioNumber, CallSid: callSid } = req.body;
   if (!callerNumber || !twilioNumber) {
     return res.status(400).json({ error: 'Twilio voice webhook is missing From or To.' });
   }
 
   try {
     const result = await db.query(
-      `SELECT id, destination_number
-       FROM client_phone_numbers
-       WHERE twilio_number = $1 AND is_active = TRUE`,
+      `SELECT p.id,p.destination_number,p.intake_enabled,c.name
+       FROM client_phone_numbers p JOIN clients c ON c.id=p.client_id
+       WHERE p.twilio_number = $1 AND p.is_active = TRUE`,
       [twilioNumber],
     );
     const phoneNumber = result.rows[0];
@@ -81,6 +88,44 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
       console.error('No active client phone-number route is configured for an incoming Twilio call.');
       response.say('This number is not configured yet. Please try again later.');
       response.hangup();
+      return sendTwiML(res, response);
+    }
+
+    if (phoneNumber.intake_enabled) {
+      if (!callSid) {
+        return res.status(400).json({ error: 'Twilio voice webhook is missing CallSid.' });
+      }
+      if (!process.env.TRIAL_TWILIO_NUMBER || twilioNumber !== process.env.TRIAL_TWILIO_NUMBER) {
+        console.error('The intake route does not match TRIAL_TWILIO_NUMBER.');
+        response.say('This number is not configured yet. Please try again later.');
+        response.hangup();
+        return sendTwiML(res, response);
+      }
+      const relayUrl = voiceAgent.websocketUrl(process.env.TWILIO_PUBLIC_BASE_URL);
+      await db.query(
+        `INSERT INTO voice_agent_sessions(call_sid,client_phone_number_id,caller_number)
+         VALUES($1,$2,$3) ON CONFLICT(call_sid) DO NOTHING`,
+        [callSid, phoneNumber.id, callerNumber],
+      );
+      response.pause({ length: 6 });
+      response.start().recording({
+        channels: 'dual',
+        track: 'both',
+        trim: 'do-not-trim',
+        recordingStatusCallback: callbackUrl('/webhooks/twilio/recording-status'),
+        recordingStatusCallbackMethod: 'POST',
+        recordingStatusCallbackEvent: 'in-progress completed absent',
+      });
+      const connect = response.connect({
+        action: callbackUrl('/webhooks/twilio/conversation-ended'),
+        method: 'POST',
+      });
+      connect.conversationRelay({
+        url: relayUrl,
+        welcomeGreeting: voiceAgent.GREETING,
+        welcomeGreetingInterruptible: 'any',
+        language: 'en-US',
+      });
       return sendTwiML(res, response);
     }
 
@@ -96,6 +141,63 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
   } catch (error) {
     console.error('Failed to route incoming Twilio call:', error);
     return res.status(500).json({ error: 'Unable to route incoming call.' });
+  }
+});
+
+router.post('/recording-status', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
+  const { CallSid: callSid, RecordingSid: recordingSid, RecordingUrl: recordingUrl,
+    RecordingStatus: recordingStatus, RecordingDuration: duration } = req.body;
+  if (!callSid || !['in-progress', 'completed', 'absent'].includes(recordingStatus)) {
+    return res.status(400).json({ error: 'Recording callback is missing a valid call or recording status.' });
+  }
+  if (recordingUrl) {
+    try {
+      const url = new URL(recordingUrl);
+      if (url.protocol !== 'https:' || url.hostname !== 'api.twilio.com') {
+        return res.status(400).json({ error: 'Recording callback URL is invalid.' });
+      }
+    } catch {
+      return res.status(400).json({ error: 'Recording callback URL is invalid.' });
+    }
+  }
+  const seconds = duration === undefined ? null : Number.parseInt(duration, 10);
+  if (seconds !== null && (!Number.isInteger(seconds) || seconds < 0)) {
+    return res.status(400).json({ error: 'Recording duration is invalid.' });
+  }
+  try {
+    const result = await db.query(
+      `UPDATE voice_agent_sessions
+       SET recording_sid=COALESCE($2,recording_sid),
+           recording_url=COALESCE($3,recording_url),
+           recording_status=$4,
+           recording_duration=COALESCE($5,recording_duration),
+           updated_at=NOW()
+       WHERE call_sid=$1`,
+      [callSid, recordingSid || null, recordingUrl || null, recordingStatus, seconds],
+    );
+    if (!result.rowCount) return res.sendStatus(404);
+    return res.sendStatus(204);
+  } catch (error) {
+    console.error('Failed to save Twilio recording status:', error.code || error.name);
+    return res.status(500).json({ error: 'Unable to save recording status.' });
+  }
+});
+
+router.post('/conversation-ended', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
+  const { CallSid: callSid } = req.body;
+  if (!callSid) return res.status(400).json({ error: 'Conversation callback is missing CallSid.' });
+  try {
+    await db.query(
+      `UPDATE voice_agent_sessions SET status='completed',updated_at=NOW()
+       WHERE call_sid=$1 AND status='active'`,
+      [callSid],
+    );
+    const response = createTwiML();
+    response.hangup();
+    return sendTwiML(res, response);
+  } catch (error) {
+    console.error('Failed to close Twilio voice session:', error.code || error.name);
+    return res.status(500).json({ error: 'Unable to close voice session.' });
   }
 });
 

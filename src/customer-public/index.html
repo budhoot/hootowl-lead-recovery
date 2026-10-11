@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-theme="system" data-accent="forest" data-density="comfortable">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <meta name="theme-color" content="#173e35"><meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-title" content="HootOwl"><meta name="description" content="Your business, your leads, your next conversation. HootOwl customer workspace.">
+ <title>HootOwl · Your workspace</title><link rel="manifest" href="/portal/manifest.webmanifest">
+ <link rel="icon" href="/portal/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/portal/icon-192.png">
+ <link rel="stylesheet" href="/portal/style.css"><script src="/portal/app.js" defer></script>
+</head>
+<body>
+ <a class="skip-link" href="#main">Skip to content</a>
+ <div id="auth-screen" class="auth-layout">
+  <section class="auth-story"><a class="wordmark" href="/portal/"><span class="owl">HO</span> HOOTOWL</a><div><p class="eyebrow">A LITTLE LESS MISSED. A LOT MORE POSSIBILITY.</p><h1>Your next customer<br>is calling.</h1><p class="story-copy">Give every conversation a place to land. Set up your business, stay on top of your calls, and make this space your own.</p><div class="story-detail"><span>01 / CONNECT</span><span>02 / ANSWER</span><span>03 / GROW</span></div></div><p class="story-footer">Your business. Always within reach.</p></section>
+  <section class="auth-panel"><div class="auth-card">
+   <p class="eyebrow">YOUR BUSINESS WORKSPACE</p><h2 id="auth-title">Welcome back.</h2><p id="auth-description" class="muted">Sign in to pick up where you left off.</p>
+   <form id="signin-form"><label>Email address<input name="email" type="email" autocomplete="username" required maxlength="254"></label><label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label><button class="primary wide" type="submit">Open my workspace <span aria-hidden="true">→</span></button></form>
+   <form id="join-form" hidden><label>Email address<input id="invite-email" type="email" readonly autocomplete="username"></label><label>Your name<input name="display_name" autocomplete="name" required maxlength="80"></label><label>Create a password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="password-help"></label><p id="password-help" class="muted small">Use at least 12 characters. A memorable phrase works well.</p><button class="primary wide" type="submit">Create my account <span aria-hidden="true">→</span></button></form>
+   <p id="auth-error" role="alert" class="error"></p><p id="auth-help" class="muted small">New here? Open the invitation link from HootOwl to set up your account. For sign-in help, contact your HootOwl operator.</p>
+  </div><p class="auth-footnote">Built for busy days. Ready for your phone.</p></section>
+ </div>
+ <div id="app" hidden>
+  <aside class="sidebar"><a class="wordmark" href="/portal/"><span class="owl">HO</span> HOOTOWL</a><div class="business-lockup"><span id="business-monogram" class="monogram">B</span><div><strong id="business-name">Your business</strong><span>Customer workspace</span></div></div>
+   <p class="eyebrow nav-heading">YOUR DAY, ORGANIZED</p><nav aria-label="Workspace"><button data-view="home" class="active"><span aria-hidden="true">◈</span> Home</button><button data-view="inbox"><span aria-hidden="true">☷</span> Inbox</button><button data-view="business"><span aria-hidden="true">▦</span> Business</button><button data-view="preferences"><span aria-hidden="true">◐</span> My space</button></nav>
+   <div class="sidebar-footer"><button data-view="install" class="install-nav">↗ &nbsp; Add to your phone</button><div class="user-row"><span id="user-avatar" class="avatar">Y</span><span id="user-name">Your account</span><button id="logout" class="icon-button" aria-label="Sign out" title="Sign out">↪</button></div><small>Powered by HootOwl Voice</small></div>
+  </aside>
+  <main id="main" tabindex="-1"><header class="topbar"><div><p class="eyebrow" id="page-kicker">YOUR WORKSPACE</p><h1 id="page-title">A good day starts here.</h1></div><button id="refresh" class="secondary">↻ <span>Refresh</span></button></header>
+   <div id="network-status" class="notice" hidden>You’re offline. Connect to the internet to load leads or save changes.</div><div id="feedback" role="status" tabindex="-1" hidden></div><section id="content" aria-busy="true"><p class="muted">Loading your workspace…</p></section>
+   <footer class="main-footer"><span>One conversation at a time.</span><span id="last-updated"></span></footer>
+  </main>
+ </div>
+ <dialog id="lead-dialog"><form id="lead-form"><div class="section-heading"><div><p class="eyebrow">FOLLOW-UP</p><h2 id="lead-title">Update lead</h2></div><button type="button" id="close-lead" class="icon-button" aria-label="Close">×</button></div><label>Status<select name="status"><option value="new">New</option><option value="in_progress">Following up</option><option value="resolved">Resolved</option></select></label><label>Business notes<textarea name="notes" maxlength="4000" rows="5"></textarea></label><p class="muted small">Keep your team’s call follow-up details here. Saving does not contact the caller.</p><p id="lead-error" class="error" role="alert"></p><button class="primary wide" type="submit">Save follow-up</button></form></dialog>
+</body></html>
