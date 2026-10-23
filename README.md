@@ -69,7 +69,14 @@ Older recovery tables and message records remain for historical compatibility, b
 
 ## Recovery and operations
 
-Provider/database failures and live telephone behavior require staging verification. This service does not send messages, including legacy recovery messages.
+## Billing, 2FA and customer phone numbers
+
+- **Wix billing.** A Wix Automation (trigger: Pricing Plans purchase, payment, cancellation or refund) sends an HTTP request to `POST <TWILIO_PUBLIC_BASE_URL>/integrations/wix/billing/events` (the HTTPS address of this service, for example `https://app.hootowl.net`, not the Wix site itself) with `Authorization: Bearer <WIX_INTAKE_SECRET>`. Body: `event_id`, `event_type` (`plan_purchased`, `payment_succeeded`, `plan_renewed`, `payment_failed`, `plan_cancelled`, `plan_expired`, `payment_refunded`), `plan_id`, `buyer_email`, optional `subscription_id`, `period_end`, `occurred_at`. Events are idempotent by `event_id`, stale events cannot overwrite newer ones, and events for buyers without a portal account stay in the operator's unmatched list until reconciled (`POST /admin/customer-workspaces/billing/reconcile`). Set the real public URL of this service, not the Wix site.
+- **Two-step verification.** Customers can enable an authenticator app (TOTP) and/or SMS codes, with recovery codes. Set `TWOFA_ENCRYPTION_KEY`. SMS needs `TWILIO_AUTH_FROM` and `SMS_SEND_ENABLED=true`; authentication messages are recorded as non-billable usage.
+- **Twilio subaccounts.** After consent and with an active subscription, a customer gets a Twilio subaccount and a number, stored with the token encrypted by `CREDENTIAL_ENCRYPTION_KEY`. The number stays inactive until the customer saves a forwarding number. Subaccounts are suspended when a subscription ends. Twilio allows 1,000 subaccounts by default. Configure the number's status callback to `/webhooks/twilio/call-status` so call minutes are recorded.
+- Usage is recorded in `usage_ledger` only; no customer is charged automatically.
+
+Provider/database failures and live telephone behavior require staging verification. This service does not send messages, including legacy recovery messages, other than sign-in codes when enabled.
 
 Use HTTPS, restricted database access, backups and controlled access to caller data and recordings. No credentials are included. The local dashboard is served directly by the Node.js process; use a hosting provider's HTTPS endpoint if Twilio needs to reach a deployed instance.
 

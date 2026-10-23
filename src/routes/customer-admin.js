@@ -16,8 +16,25 @@ async function invite(connection, clientId, email) {
 router.get('/', async (req, res) => {
  res.json((await db.query(`SELECT c.id,c.name,c.onboarding_completed_at,
  (SELECT count(*) FROM customer_users u WHERE u.client_id=c.id) AS accounts,
- (SELECT count(*) FROM client_phone_numbers p WHERE p.client_id=c.id) AS phone_routes
- FROM clients c ORDER BY c.id DESC`)).rows);
+ (SELECT count(*) FROM client_phone_numbers p WHERE p.client_id=c.id) AS phone_routes,
+ COALESCE(b.status,'none') AS subscription_status, b.current_period_end,
+ COALESCE(tp.status,'not_provisioned') AS twilio_status
+ FROM clients c LEFT JOIN billing_subscriptions b ON b.client_id=c.id
+ LEFT JOIN twilio_provisioning tp ON tp.client_id=c.id ORDER BY c.id DESC`)).rows);
+});
+router.get('/billing/unmatched', async (req, res) => {
+ res.json((await db.query(`SELECT id,event_type,payload->>'buyer_email' AS buyer_email,payload->>'plan_id' AS plan_id,received_at
+ FROM billing_events WHERE outcome='unmatched' ORDER BY received_at DESC LIMIT 200`)).rows);
+});
+router.post('/billing/reconcile', async (req, res) => {
+ res.json(await require('../billing').reconcileUnmatched());
+});
+router.post('/:id/provision', async (req, res) => {
+ if (!/^[1-9][0-9]*$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid customer.' });
+ const provisioning = require('../provisioning');
+ await db.query('UPDATE twilio_provisioning SET attempts=0 WHERE client_id=$1', [req.params.id]);
+ const result = await provisioning.provision(req.params.id, { areaCode: req.body?.area_code });
+ res.status(result.ok ? 200 : 409).json({ ok: result.ok, reason: result.reason || null });
 });
 router.post('/', async (req, res) => {
  const parsed = inviteSchema.extend({ name: z.string().trim().min(1).max(80) }).safeParse(req.body);

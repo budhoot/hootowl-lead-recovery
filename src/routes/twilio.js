@@ -2,15 +2,16 @@ const express = require('express');
 const twilio = require('twilio');
 const db = require('../db');
 const voiceAgent = require('../voice-agent');
+const provisioning = require('../provisioning');
+const usage = require('../usage');
 
 const router = express.Router();
 const missedCallStatuses = new Set(['no-answer', 'busy', 'failed']);
 
-function validateTwilioWebhook(req, res, next) {
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+async function validateTwilioWebhook(req, res, next) {
   const publicBaseUrl = process.env.TWILIO_PUBLIC_BASE_URL;
 
-  if (!authToken || !publicBaseUrl) {
+  if (!process.env.TWILIO_AUTH_TOKEN || !publicBaseUrl) {
     console.error('Twilio webhook verification requires TWILIO_AUTH_TOKEN and TWILIO_PUBLIC_BASE_URL.');
     return res.status(503).json({ error: 'Twilio webhook verification is not configured.' });
   }
@@ -39,7 +40,16 @@ function validateTwilioWebhook(req, res, next) {
   }
 
   const signature = req.get('X-Twilio-Signature') || '';
-  if (!twilio.validateRequest(authToken, signature, requestUrl, req.body || {})) {
+  // The claimed AccountSid only selects which token to verify with; an unknown or forged account fails the signature check.
+  let authToken = process.env.TWILIO_AUTH_TOKEN;
+  try {
+    const claimed = req.body?.AccountSid;
+    if (claimed && claimed !== process.env.TWILIO_ACCOUNT_SID) authToken = await provisioning.tokenForAccount(claimed);
+  } catch (error) {
+    console.error('Unable to load subaccount credentials for webhook verification:', error.message);
+    return res.status(503).json({ error: 'Twilio webhook verification is not configured correctly.' });
+  }
+  if (!authToken || !twilio.validateRequest(authToken, signature, requestUrl, req.body || {})) {
     return res.status(403).json({ error: 'Invalid Twilio signature.' });
   }
 
@@ -142,6 +152,13 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
     console.error('Failed to route incoming Twilio call:', error);
     return res.status(500).json({ error: 'Unable to route incoming call.' });
   }
+});
+
+router.post('/call-status', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
+  const { CallSid: callSid, CallStatus: status, CallDuration: duration, To: to } = req.body;
+  if (!callSid || !to) return res.status(400).json({ error: 'Call status is missing CallSid or To.' });
+  if (status === 'completed') await usage.recordCall(callSid, to, duration);
+  return res.sendStatus(204);
 });
 
 router.post('/recording-status', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {

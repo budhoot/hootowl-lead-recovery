@@ -3,6 +3,7 @@ const { z } = require('zod');
 const db = require('../db');
 const { hash } = require('../auth');
 const auth = require('../customer-auth');
+const twoFactor = require('./customer-2fa');
 const router = express.Router();
 router.use(express.json({ limit: '16kb' }), auth.protectWrite);
 const authLimit = require('express-rate-limit').rateLimit({ windowMs: 15 * 60000, limit: 30, message: { error: 'Too many attempts. Please wait 15 minutes before trying again.' } });
@@ -48,11 +49,33 @@ router.post('/session', authLimit, async (req, res) => {
  const user = (await db.query('SELECT id,password_hash FROM customer_users WHERE email=$1', [parsed.data.email])).rows[0];
  const valid = await auth.verifyPassword(parsed.data.password, user?.password_hash || dummyHash);
  if (!user || !valid) return res.status(401).json({ error: 'Email or password was not accepted.' });
+ const factors = await twoFactor.methodsFor(user.id);
+ if (factors.totp || factors.sms) {
+  return res.json({ authenticated: false, two_factor_required: true, challenge: await twoFactor.createChallenge(user.id), methods: factors });
+ }
  await db.query('DELETE FROM customer_sessions WHERE expires_at<NOW()');
  await auth.issueSession(req, res, user.id);
  res.json({ authenticated: true });
 });
+router.use(twoFactor.login);
 router.use(auth.requireCustomer);
+router.use(twoFactor.manage);
+router.get('/subscription', async (req, res) => {
+ const clientId = req.customer.client_id;
+ const sub = (await db.query('SELECT status,current_period_end FROM billing_subscriptions WHERE client_id=$1', [clientId])).rows[0];
+ const prov = (await db.query('SELECT status,last_error FROM twilio_provisioning WHERE client_id=$1', [clientId])).rows[0];
+ res.json({ subscription: sub || { status: 'none' }, provisioning: prov ? { status: prov.status, failed: prov.status === 'failed' } : { status: 'not_started' }, usage_30_days: await require('../usage').summary(clientId) });
+});
+router.post('/provisioning', authLimit, async (req, res) => {
+ const parsed = z.object({ consent: z.literal(true), area_code: z.string().regex(/^[2-9][0-9]{2}$/).optional() }).strict().safeParse(req.body);
+ if (!parsed.success) return res.status(400).json({ error: 'Confirm consent and, optionally, enter a 3-digit area code.' });
+ const provisioning = require('../provisioning');
+ const requested = await provisioning.requestProvisioning(req.customer.client_id);
+ if (!requested.ok) return res.status(402).json({ error: 'An active HootOwl subscription is required before we can set up your phone number.' });
+ const result = await provisioning.provision(req.customer.client_id, { areaCode: parsed.data.area_code });
+ if (!result.ok) return res.status(502).json({ error: 'We could not finish setup yet. HootOwl has been notified and will retry.' });
+ res.status(result.already ? 200 : 201).json({ status: 'active' });
+});
 router.delete('/session', async (req, res) => {
  await db.query('DELETE FROM customer_sessions WHERE token_hash=$1', [hash(auth.tokenFrom(req))]);
  res.clearCookie(auth.cookieName, { ...auth.cookieOptions(req), maxAge: undefined }); res.sendStatus(204);
@@ -85,7 +108,9 @@ router.patch('/routes/:id', async (req, res) => {
  const parsed = z.object({ destination_number: z.union([z.literal(''), z.string().regex(/^\+[1-9][0-9]{1,14}$/)]) }).strict().safeParse(req.body);
  if (!parsed.success || !/^[1-9][0-9]*$/.test(req.params.id)) return res.status(400).json({ error: 'Enter a phone number with country code, such as +12125550123.' });
  const destination = parsed.data.destination_number || null;
- const result = await db.query(`UPDATE client_phone_numbers SET destination_number=$3::varchar WHERE id=$1 AND client_id=$2
+ const result = await db.query(`UPDATE client_phone_numbers SET destination_number=$3::varchar,
+ is_active=(is_active OR $3::varchar IS NOT NULL),
+ intake_enabled=(intake_enabled AND NOT (NOT is_active AND $3::varchar IS NOT NULL)) WHERE id=$1 AND client_id=$2
  AND ($3::varchar IS NOT NULL OR intake_enabled=TRUE)
  AND ($3::varchar IS NULL OR NOT EXISTS(SELECT 1 FROM client_phone_numbers WHERE twilio_number=$3::varchar)) RETURNING id`, [req.params.id, req.customer.client_id, destination]);
  if (!result.rowCount) return res.status(400).json({ error: 'This route is unavailable or that number would forward back into HootOwl.' });
