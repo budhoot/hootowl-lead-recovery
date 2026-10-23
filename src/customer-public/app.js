@@ -4,8 +4,9 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 let workspace, leads = { calls: [], replies: [] }, view = 'home', filter = 'open', leadId, requestId = 0, installPrompt;
 let invitation = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (invitation) history.replaceState(null, '', location.pathname);
-const titles = { home: 'A good day starts here.', inbox: 'Every conversation matters.', business: 'Make yourself at home.', preferences: 'A space that feels like you.', install: 'Your business. In your pocket.' };
-const labels = { home: 'YOUR WORKSPACE', inbox: 'YOUR LEAD INBOX', business: 'BUSINESS SETTINGS', preferences: 'APPEARANCE & ACCOUNT', install: 'TAKE HOOTOWL WITH YOU' };
+const titles = { home: 'A good day starts here.', inbox: 'Every conversation matters.', business: 'Make yourself at home.', plan: 'Your plan, your number, your security.', preferences: 'A space that feels like you.', install: 'Your business. In your pocket.' };
+const labels = { home: 'YOUR WORKSPACE', inbox: 'YOUR LEAD INBOX', business: 'BUSINESS SETTINGS', plan: 'PLAN & SECURITY', preferences: 'APPEARANCE & ACCOUNT', install: 'TAKE HOOTOWL WITH YOU' };
+let planData = null, newSecret = null, newCodes = null, challenge = null;
 const statusLabel = value => ({ new: 'New', in_progress: 'Following up', resolved: 'Resolved' }[value] || value);
 function date(value) { return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: workspace.business.timezone, hour12: workspace.user.time_format === '12' }).format(new Date(value)); }
 const initials = name => name.split(/\s+/).slice(0, 2).map(v => v[0]).join('').toUpperCase();
@@ -14,7 +15,8 @@ const empty = (title, message) => `<div class="empty"><div class="empty-icon" ar
 function feedback(message, isError = false) { $('#feedback').textContent = message; $('#feedback').className = isError ? 'error' : ''; $('#feedback').hidden = false; }
 function applyTheme(user) { for (const key of ['theme', 'accent', 'density']) document.documentElement.dataset[key] = user[key]; }
 function showLogin() {
- requestId++; workspace = null; leads = { calls: [], replies: [] }; $('#content').replaceChildren();
+ requestId++; workspace = null; planData = null; newSecret = null; newCodes = null; challenge = null; leads = { calls: [], replies: [] }; $('#content').replaceChildren();
+ $('#twofa-form').hidden = true;
  $('#app').hidden = true; $('#auth-screen').hidden = false; $('#signin-form').hidden = false; $('#join-form').hidden = true;
  $('#auth-title').textContent = 'Welcome back.'; $('#auth-description').textContent = 'Sign in to pick up where you left off.';
  if ($('#lead-dialog').open) $('#lead-dialog').close();
@@ -58,8 +60,49 @@ function navigate(next) {
 function render() {
  $('#page-title').textContent = titles[view]; $('#page-kicker').textContent = labels[view];
  document.querySelectorAll('nav button').forEach(b => { b.classList.toggle('active', b.dataset.view === view); if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
- $('#content').innerHTML = ({ home, inbox, business, preferences, install })[view]();
+ $('#content').innerHTML = ({ home, inbox, business, plan, preferences, install })[view]();
+ if (view === 'plan' && !planData) loadPlan();
  bindForms();
+}
+async function loadPlan() {
+ try { const [subscription, security] = await Promise.all([api('/subscription'), api('/2fa')]); planData = { subscription, security }; if (view === 'plan') render(); }
+ catch (error) { feedback(error.message, true); }
+}
+const money = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 1 });
+const usageLabel = { call: 'Call minutes', sms_out: 'Texts sent', sms_in: 'Texts received', auth_sms: 'Sign-in texts' };
+function plan() {
+ if (!planData) return '<p class="muted">Loading your plan…</p>';
+ const { subscription: s, security: sec } = planData, sub = s.subscription, prov = s.provisioning;
+ const subText = { active: 'Active', past_due: 'Payment needed', cancelled: 'Cancelled', refunded: 'Refunded', none: 'No plan found' }[sub.status] || sub.status;
+ const usage = s.usage_30_days.filter(u => u.kind !== 'auth_sms');
+ const provisionCard = prov.status === 'active' ? `<p>${badge('Phone number ready')} Manage call forwarding on the Business page.</p>`
+  : sub.status !== 'active' ? '<p class="muted">An active HootOwl subscription is needed before we can set up your phone number. If you just subscribed, refresh in a minute.</p>'
+  : `<form id="provision-form"><label>Preferred area code <span class="muted small">Optional</span><input name="area_code" inputmode="numeric" pattern="[2-9][0-9]{2}" maxlength="3"></label><label class="check-inline"><input type="checkbox" name="consent" required> I agree that HootOwl may create a phone number and Twilio account for my business and bill usage to my plan.</label>${prov.failed ? '<p class="error">Setup did not finish last time. You can try again.</p>' : ''}<button class="primary" type="submit">Set up my phone number</button></form>`;
+ const secretBox = newSecret ? `<div class="notice"><p>Add this key to your authenticator app, then enter the 6-digit code it shows.</p><p><code>${esc(newSecret.secret)}</code></p><p class="small muted">Setup link: <code>${esc(newSecret.otpauth_uri)}</code></p><form id="totp-confirm-form"><label>6-digit code<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><button class="primary" type="submit">Turn on</button></form></div>` : '';
+ const codesBox = newCodes ? `<div class="notice" role="alert"><strong>Save these recovery codes now.</strong><p class="small">Each works once if you lose your phone. They will not be shown again.</p><p><code>${newCodes.map(esc).join('<br>')}</code></p><button class="secondary" id="codes-saved">I saved them</button></div>` : '';
+ return `<div class="settings-stack"><section class="card"><h2>Your plan</h2><p>${badge(subText, sub.status !== 'active')}${sub.current_period_end ? ` <span class="muted small">Current period ends ${esc(new Date(sub.current_period_end).toLocaleDateString())}</span>` : ''}</p>${usage.length ? `<h3>Last 30 days</h3>${usage.map(u => `<div class="check-row"><div><h3>${esc(usageLabel[u.kind] || u.kind)}</h3><p>${money(u.quantity)}</p></div></div>`).join('')}` : '<p class="muted small">No usage in the last 30 days.</p>'}</section>
+ <section class="card"><h2>Your HootOwl phone number</h2>${provisionCard}</section>
+ <section class="card"><h2>Two-step verification</h2><p class="section-intro">Add a second step when you sign in.</p>${codesBox}${secretBox}
+ <p>Authenticator app: ${badge(sec.totp ? 'On' : 'Off', !sec.totp)} ${sec.totp ? '' : '<button class="secondary" id="totp-setup">Set up</button>'}</p>
+ <p>Text message: ${badge(sec.sms ? 'On ' + (sec.sms_phone || '') : 'Off', !sec.sms)}</p>
+ <form id="sms-setup-form"><label>Mobile number<input name="phone" type="tel" placeholder="+15551234567" pattern="\\+[1-9][0-9]{6,14}" required></label><button class="secondary" type="submit">${sec.sms ? 'Change number' : 'Text me a code'}</button></form>
+ <form id="sms-confirm-form" ${planData.smsPending ? '' : 'hidden'}><label>Code we texted you<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><button class="primary" type="submit">Confirm</button></form>
+ ${sec.totp || sec.sms ? `<p class="muted small">Recovery codes remaining: ${sec.recovery_codes_remaining}</p><form id="twofa-manage-form"><label>Your password<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label><button class="secondary" type="submit" data-act="recovery-codes">New recovery codes</button> <button class="secondary" type="submit" data-act="disable">Turn off two-step</button></form>` : ''}</section></div>`;
+}
+function bindPlan() {
+ const done = async message => { planData = null; await loadPlan(); if (message) feedback(message); };
+ const fail = error => feedback(error.message, true);
+ const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
+ if ($('#provision-form')) $('#provision-form').onsubmit = event => { event.preventDefault(); submit(event.target, d => post('/provisioning', { consent: true, ...(d.area_code ? { area_code: d.area_code } : {}) }), async () => { await refresh(); planData = null; await loadPlan(); feedback('Your phone number is ready. Add a forwarding number on the Business page to start routing calls.'); }).catch(fail); };
+ if ($('#totp-setup')) $('#totp-setup').onclick = async () => { try { newSecret = await post('/2fa/totp/setup', {}); render(); } catch (error) { fail(error); } };
+ if ($('#totp-confirm-form')) $('#totp-confirm-form').onsubmit = event => { event.preventDefault(); submit(event.target, d => post('/2fa/totp/confirm', d), async r => { newSecret = null; newCodes = r.recovery_codes; await done('Authenticator app is on.'); }).catch(fail); };
+ if ($('#sms-setup-form')) $('#sms-setup-form').onsubmit = event => { event.preventDefault(); submit(event.target, d => post('/2fa/sms/setup', d), () => { planData.smsPending = true; render(); feedback('We sent a code to your phone.'); }).catch(fail); };
+ if ($('#sms-confirm-form')) $('#sms-confirm-form').onsubmit = event => { event.preventDefault(); submit(event.target, d => post('/2fa/sms/confirm', d), async r => { newCodes = r.recovery_codes; await done('Text message verification is on.'); }).catch(fail); };
+ if ($('#twofa-manage-form')) $('#twofa-manage-form').onsubmit = event => {
+  event.preventDefault(); const act = event.submitter?.dataset.act;
+  submit(event.target, d => post('/2fa/' + act, d), async r => { newCodes = r.recovery_codes || null; newSecret = null; await done(act === 'disable' ? 'Two-step verification is off.' : 'New recovery codes created.'); }).catch(fail);
+ };
+ if ($('#codes-saved')) $('#codes-saved').onclick = () => { newCodes = null; render(); };
 }
 function checkRow(done, title, description) { return `<div class="check-row"><span class="check" aria-hidden="true">${done ? '✓' : '○'}</span><div><h3>${esc(title)}</h3><p>${esc(description)}</p></div></div>`; }
 function home() {
@@ -92,6 +135,7 @@ function install() {
  return `<section class="hero"><div><p class="eyebrow">MADE TO GO WITH YOU</p><h2>One tap.<br>Back to your business.</h2><p>${standalone ? 'You’re already using HootOwl as a home-screen app on this device.' : 'Add HootOwl to your home screen for a full-screen workspace, without downloading an app from a store.'}</p>${installPrompt ? '<button id="install-now" class="primary">Install HootOwl →</button>' : ''}</div><div class="hero-art" aria-hidden="true"><div class="orbit"><span class="owl">HO</span></div></div></section><div class="install-grid"><section class="card"><h2>On iPhone or iPad</h2><ol class="steps"><li>Open this workspace in <strong>Safari</strong>.</li><li>Tap the <strong>Share</strong> button.</li><li>Choose <strong>Add to Home Screen</strong>. If offered, turn on <strong>Open as Web App</strong>.</li><li>Tap <strong>Add</strong>, then open HootOwl from your home screen.</li></ol></section><section class="card"><h2>On Android</h2><ol class="steps"><li>Open this workspace in <strong>Chrome</strong>.</li><li>Open the browser’s three-dot menu.</li><li>Choose <strong>Add to Home screen</strong> or <strong>Install app</strong>.</li><li>Confirm, then open HootOwl from your home screen.</li></ol></section></div><p class="muted small">An internet connection is required to load leads and save changes. This release does not send push notifications. Use your regular workspace address, not a one-time invitation link, when installing.</p>`;
 }
 function bindForms() {
+ if (view === 'plan') bindPlan();
  if ($('#business-form')) $('#business-form').onsubmit = event => {
   event.preventDefault(); submit(event.target, data => api('/business', { method: 'PATCH', body: JSON.stringify({ ...data, complete_setup: true }) }), async () => { await refresh(); feedback('Business details saved. Your profile is ready.'); }).catch(error => feedback(error.message, true));
  };
@@ -116,7 +160,26 @@ document.addEventListener('click', async event => {
   $('#lead-error').textContent = ''; $('#lead-dialog').showModal();
  }
 });
-$('#signin-form').onsubmit = event => { event.preventDefault(); $('#auth-error').textContent = ''; submit(event.target, data => api('/session', { method: 'POST', body: JSON.stringify(data) }), async () => { event.target.reset(); view = 'home'; await refresh(); }).catch(error => { $('#auth-error').textContent = error.message; }); };
+$('#signin-form').onsubmit = event => { event.preventDefault(); $('#auth-error').textContent = ''; submit(event.target, data => api('/session', { method: 'POST', body: JSON.stringify(data) }), async result => {
+ event.target.reset();
+ if (result.two_factor_required) return showTwoFactor(result);
+ view = 'home'; await refresh();
+}).catch(error => { $('#auth-error').textContent = error.message; }); };
+const methodNames = { totp: 'Authenticator app', sms: 'Text message', recovery: 'Recovery code' };
+function showTwoFactor(result) {
+ challenge = result.challenge;
+ const available = [result.methods.totp && 'totp', result.methods.sms && 'sms', 'recovery'].filter(Boolean);
+ $('#twofa-method').innerHTML = available.map(m => `<option value="${m}">${methodNames[m]}</option>`).join('');
+ $('#signin-form').hidden = true; $('#twofa-form').hidden = false;
+ $('#auth-title').textContent = 'One more step.'; $('#auth-description').textContent = 'Enter a code to finish signing in.';
+ syncTwoFactorMethod();
+}
+function syncTwoFactorMethod() { $('#twofa-sms').hidden = $('#twofa-method').value !== 'sms'; }
+function hideTwoFactor() { challenge = null; $('#twofa-form').hidden = true; $('#twofa-form').reset(); showLogin(); }
+$('#twofa-method').onchange = syncTwoFactorMethod;
+$('#twofa-cancel').onclick = hideTwoFactor;
+$('#twofa-sms').onclick = async () => { $('#auth-error').textContent = ''; try { await api('/session/2fa/sms', { method: 'POST', body: JSON.stringify({ challenge }) }); $('#auth-error').textContent = 'We texted you a code.'; } catch (error) { $('#auth-error').textContent = error.message; } };
+$('#twofa-form').onsubmit = event => { event.preventDefault(); $('#auth-error').textContent = ''; submit(event.target, data => api('/session/2fa', { method: 'POST', body: JSON.stringify({ ...data, challenge }) }), async () => { challenge = null; event.target.reset(); event.target.hidden = true; view = 'home'; await refresh(); }).catch(error => { $('#auth-error').textContent = error.message; }); };
 $('#join-form').onsubmit = event => { event.preventDefault(); $('#auth-error').textContent = ''; submit(event.target, data => api('/register', { method: 'POST', body: JSON.stringify({ ...data, token: invitation }) }), async () => { invitation = null; event.target.reset(); view = 'business'; await refresh(); }).catch(error => { $('#auth-error').textContent = error.message; }); };
 $('#lead-form').onsubmit = event => { event.preventDefault(); submit(event.target, data => api('/leads/' + encodeURIComponent(leadId), { method: 'PATCH', body: JSON.stringify(data) }), async () => { $('#lead-dialog').close(); await refresh(); feedback('Follow-up saved.'); }).catch(error => { $('#lead-error').textContent = error.message; }); };
 $('#close-lead').onclick = () => $('#lead-dialog').close(); $('#logout').onclick = logout; $('#refresh').onclick = () => { $('#feedback').hidden = true; refresh(); };
