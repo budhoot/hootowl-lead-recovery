@@ -135,6 +135,8 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
         welcomeGreeting: voiceAgent.GREETING,
         welcomeGreetingInterruptible: 'any',
         language: 'en-US',
+        ttsProvider: process.env.OWL_TTS_PROVIDER || 'ElevenLabs',
+        voice: process.env.OWL_TTS_VOICE || 'UgBBYS2sOqTuMpoF3BR0',
       });
       return sendTwiML(res, response);
     }
