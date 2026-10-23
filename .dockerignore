@@ -5,3 +5,7 @@
 *.authinfo
 node_modules
 upload
+local
+artifacts
+*.docx
+*.pdf

@@ -1,0 +1,32 @@
+{
+  "folders": [
+	{
+		"path": ".git"
+	},
+	{
+		"path": "db"
+	},
+	{
+		"path": "hootowl"
+	},
+	{
+		"path": "node_modules"
+	},
+	{
+		"path": "scripts"
+	},
+	{
+		"path": "src"
+	},
+	{
+		"path": "test"
+	}
+],
+  "settings": {
+    "powershell.cwd": ".git",
+    "liveServer.settings.multiRootWorkspaceName": "hootowl",
+    "workbench.editor.autoLockGroups": {
+      "default": true
+    }
+  }
+}

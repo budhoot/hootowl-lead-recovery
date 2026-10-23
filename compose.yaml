@@ -1,0 +1,50 @@
+name: hootowl
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - '127.0.0.1:3000:3000'
+    restart: unless-stopped
+    networks: [hootowl]
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+  worker:
+    build: .
+    command: ['node', 'src/worker.js']
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
+    restart: unless-stopped
+    networks: [hootowl]
+    depends_on:
+      api:
+        condition: service_healthy
+  pgadmin:
+    image: dpage/pgadmin4:9
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    ports:
+      - '127.0.0.1:5050:80'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./local/pgadmin-servers.json:/pgadmin4/servers.json:ro
+      - ./local/pgpass:/tmp/hootowl-pgpass:ro
+    entrypoint: ['/bin/sh', '-c', 'cp /tmp/hootowl-pgpass /pgpass && chmod 600 /pgpass && /entrypoint.sh']
+    restart: unless-stopped
+    networks: [hootowl]
+networks:
+  hootowl:
+    external: true
+    name: hootowl-network
+volumes:
+  pgadmin-data:

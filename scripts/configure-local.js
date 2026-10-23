@@ -1,0 +1,27 @@
+// Connect to the existing PostgreSQL container without printing credentials.
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const dotenv = require('dotenv');
+const path = require('node:path');
+const root = path.join(__dirname, '..');
+const info = JSON.parse(execFileSync('docker', ['inspect', 'hootowl-postgres'], {encoding:'utf8'}))[0];
+const config = Object.fromEntries(info.Config.Env.map(line => {const i=line.indexOf('=');return [line.slice(0,i),line.slice(i+1)];}));
+if (!config.POSTGRES_PASSWORD) throw new Error('Existing database password is unavailable.');
+const file=path.join(root,'.env');
+const env=dotenv.parse(fs.readFileSync(file));
+const user=config.POSTGRES_USER, database=config.POSTGRES_DB || user;
+env.DATABASE_URL ||= `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(config.POSTGRES_PASSWORD)}@127.0.0.1:5432/${database}`;
+env.ADMIN_API_KEY ||= crypto.randomBytes(32).toString('hex');
+env.WIX_INTAKE_SECRET ||= crypto.randomBytes(32).toString('hex');
+env.SMS_SEND_ENABLED ||= 'false';
+env.HOST ||= '127.0.0.1';
+env.WIX_SITE_URL ||= 'https://www.hootowl.net';
+env.PGADMIN_DEFAULT_EMAIL ||= 'operator@hootowl.net';
+env.PGADMIN_DEFAULT_PASSWORD ||= crypto.randomBytes(24).toString('base64url');
+env.DOCKER_DATABASE_URL = env.DATABASE_URL.replace('@127.0.0.1:', '@hootowl-postgres:');
+fs.writeFileSync(file,Object.entries(env).map(([k,v])=>`${k}=${JSON.stringify(v)}`).join('\n')+'\n');
+fs.mkdirSync(path.join(root,'local'),{recursive:true});
+fs.writeFileSync(path.join(root,'local','pgadmin-servers.json'),JSON.stringify({Servers:{'1':{Name:'HootOwl PostgreSQL',Group:'HootOwl',Host:'hootowl-postgres',Port:5432,MaintenanceDB:database,Username:user,SSLMode:'prefer',PassFile:'/pgpass'}}},null,2));
+fs.writeFileSync(path.join(root,'local','pgpass'),`hootowl-postgres:5432:${database}:${user}:${config.POSTGRES_PASSWORD.replace(/\\/g,'\\\\').replace(/:/g,'\\:')}\n`);
+console.log('Local connection, operator key and intake secret configured. SMS sending is '+env.SMS_SEND_ENABLED+'. No credentials printed.');

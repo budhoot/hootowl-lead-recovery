@@ -2,19 +2,19 @@
 
 This Node.js/PostgreSQL service answers the Nocona Hills Repair & Replace line with an AI voice agent, records the call, and can book a visit by voice. SMS sending and inbound SMS handling are disabled.
 
-## Start here (Windows PowerShell)
+## Start the dashboard locally (Windows PowerShell)
 
-1. Install Node.js 22 LTS and PostgreSQL. Create a database named `hootowl` and a database user/password.
-2. Open PowerShell in the project folder.
-3. Run `npm ci`. The repository excludes installed dependencies and private credentials.
-4. Run `Copy-Item .env.example .env`. Edit `.env` with your PostgreSQL connection string and Twilio credentials. Set `TWILIO_PUBLIC_BASE_URL` to the exact HTTPS origin of your API, with no path. Generate the admin key with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and paste it into `.env`.
-5. Run `npm run db:migrate`, then `npm start`.
-6. Do not run `npm run worker`; the legacy recovery SMS worker is disabled.
-7. Check `http://localhost:3000/health` (or the port set in `PORT`) for process liveness and `/ready` for database readiness.
+1. Install Node.js 22 LTS and PostgreSQL locally, or use a PostgreSQL service you already have. Create a database and login role for HootOwl.
+2. Open PowerShell in the project folder and run `Copy-Item .env.example .env`.
+3. Set `DATABASE_URL` in `.env` to the PostgreSQL connection string. Set `ADMIN_API_KEY` to a random secret, for example with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+4. Run `.\scripts\start-local.ps1`. It installs dependencies if needed, applies pending database migrations, and starts the Node.js server.
+5. Open `http://127.0.0.1:3000/operator/`. The dashboard is local to your computer; `/health` checks process liveness and `/ready` checks database readiness.
+
+This local dashboard setup runs directly in Node.js and PostgreSQL. It does not need Docker, Docker Compose, pgAdmin, or a tunnel. `npm start` can be used instead of the PowerShell script after dependencies are installed and migrations have been applied.
 
 ## Twilio configuration
 
-Configure the Twilio number's incoming Voice webhook as `POST https://YOUR-API/webhooks/twilio/voice`. Do not configure or use an SMS webhook. Incoming Twilio webhooks and the ConversationRelay WebSocket handshake require valid Twilio signatures. The voice agent WebSocket is served at `wss://YOUR-API/webhooks/twilio/agent`.
+The dashboard works locally without Twilio credentials or a public tunnel. To receive real calls, Twilio must be able to reach the API over public HTTPS: set `TWILIO_PUBLIC_BASE_URL` to the deployed API's exact HTTPS origin, then configure the number's incoming Voice webhook as `POST https://YOUR-API/webhooks/twilio/voice`. Do not configure or use an SMS webhook. Incoming Twilio webhooks and the ConversationRelay WebSocket handshake require valid Twilio signatures. The voice agent WebSocket is served at `wss://YOUR-API/webhooks/twilio/agent`.
 
 ## Register your first client
 
@@ -71,7 +71,7 @@ Older recovery tables and message records remain for historical compatibility, b
 
 Provider/database failures and live telephone behavior require staging verification. This service does not send messages, including legacy recovery messages.
 
-Use HTTPS, restricted database access, backups and controlled access to caller data and recordings. No credentials are included. The Dockerfile runs the API as a non-root user; run migrations separately before starting the service. The old Python import check and empty legacy Docker file are not the app entry point.
+Use HTTPS, restricted database access, backups and controlled access to caller data and recordings. No credentials are included. The local dashboard is served directly by the Node.js process; use a hosting provider's HTTPS endpoint if Twilio needs to reach a deployed instance.
 
 ## Validation
 
