@@ -87,6 +87,7 @@ test('twilio provisioning: consent, subscription gate, idempotency, failure/retr
 
   // Cancellation suspends the subaccount; reactivation restores it; stale events do not.
   await db.query("INSERT INTO customer_users(client_id,email,display_name,password_hash) VALUES($1,'p2@example.invalid','x','x')", [client.id]);
+  process.env.WIX_PLAN_IDS = 'p';
   const ev = (id, type, at) => request(app).post('/integrations/wix/billing/events').set('Authorization', 'Bearer ' + process.env.WIX_INTAKE_SECRET)
    .send({ event_id: id, event_type: type, plan_id: 'p', buyer_email: 'p@example.invalid', occurred_at: at });
   await db.query("UPDATE billing_subscriptions SET last_event_at='2020-01-01'");

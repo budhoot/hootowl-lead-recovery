@@ -15,6 +15,11 @@ function allowedPlans() {
   return (process.env.WIX_PLAN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
+function isKnownPlan(planId) {
+  const plans = allowedPlans();
+  return plans.length === 0 || plans.includes(planId);
+}
+
 async function findClientByEmail(email) {
   const { rows } = await db.query(
     `SELECT client_id FROM customer_users WHERE lower(email) = lower($1)
@@ -24,8 +29,7 @@ async function findClientByEmail(email) {
 
 // Applies one Wix billing event exactly once. Replays return duplicate=true without touching state.
 async function applyWixEvent(event) {
-  const plans = allowedPlans();
-  const known = plans.length === 0 || plans.includes(event.plan_id);
+  const known = isKnownPlan(event.plan_id);
   const inserted = await db.query(
     `INSERT INTO billing_events(source,event_id,event_type,outcome,payload) VALUES('wix',$1,$2,$3,$4)
      ON CONFLICT(source,event_id) DO NOTHING RETURNING id`,
@@ -77,4 +81,4 @@ async function reconcileUnmatched() {
   return { applied };
 }
 
-module.exports = { EVENT_TYPES, applyWixEvent, isSubscriptionActive, reconcileUnmatched };
+module.exports = { EVENT_TYPES, applyWixEvent, isKnownPlan, isSubscriptionActive, reconcileUnmatched };

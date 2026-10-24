@@ -1,18 +1,11 @@
 const express = require('express');
-const crypto = require('node:crypto');
 const { z } = require('zod');
 const db = require('../db');
-const { requireOperator, hash } = require('../auth');
+const { requireOperator } = require('../auth');
+const { issueInvite: invite } = require('../onboarding');
 const router = express.Router();
 router.use(requireOperator, express.json({ limit: '8kb' }));
 const inviteSchema = z.object({ email: z.string().trim().email().max(254).transform(v => v.toLowerCase()) });
-
-async function invite(connection, clientId, email) {
- const token = crypto.randomBytes(32).toString('hex');
- await connection.query('DELETE FROM customer_invites WHERE client_id=$1 AND email=$2 AND used_at IS NULL', [clientId, email]);
- await connection.query("INSERT INTO customer_invites(token_hash,client_id,email,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '48 hours')", [hash(token), clientId, email]);
- return { invitation_path: `/portal/#invite=${token}`, expires_in_hours: 48 };
-}
 router.get('/', async (req, res) => {
  res.json((await db.query(`SELECT c.id,c.name,c.onboarding_completed_at,
  (SELECT count(*) FROM customer_users u WHERE u.client_id=c.id) AS accounts,

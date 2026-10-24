@@ -69,6 +69,28 @@ is not in `WIX_PLAN_IDS`.
 }
 ```
 
+## Wix Automations endpoint (used in production)
+Wix Automations' "Send HTTP request" step cannot set headers, so it uses a second endpoint with
+Wix's own field names and the secret in the body (never in the URL, which proxies may log):
+
+`POST https://hootowl-lead-recovery-production.up.railway.app/integrations/wix/automation`
+
+| Field | Required | Source in the Pricing Plans trigger |
+|---|---|---|
+| `secret` | yes | The `WIX_INTAKE_SECRET` value |
+| `event` | yes | Fixed per automation: `plan_purchased`, `plan_cancelled` or `plan_expired` |
+| `plan_id` | yes | `plan_id` |
+| `order_id` | yes | `plan_order_id` (the idempotency key is `event:order_id`) |
+| `email` | yes | `contact.email` |
+| `first_name`, `last_name` | no | `contact.name.first`, `contact.name.last` |
+| `valid_until` | no | `plan_valid_until_iso`; empty means no end date |
+
+For `plan_purchased` from an email with no HootOwl account, the app creates a workspace named
+after the buyer and a 7-day portal invitation. The response carries the link to email:
+`{ "accepted": true, "duplicate": false, "outcome": "applied", "invited": true, "onboarding_link": "https://…/portal/#invite=…" }`.
+Existing accounts get `invited: false` and the portal sign-in address. A retried order returns 200
+and a fresh link. Plans not in `WIX_PLAN_IDS` are ignored and create nothing.
+
 ## Open items for Wix Symphony to confirm
 1. The exact Wix event names it can emit, and how they map to the event types above.
 2. Whether it can send a custom `Authorization` header and a JSON body in this shape.
