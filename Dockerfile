@@ -7,4 +7,4 @@ COPY scripts ./scripts
 COPY db ./db
 USER node
 EXPOSE 3000
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "node scripts/migrate.js && node src/server.js"]

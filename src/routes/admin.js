@@ -57,9 +57,9 @@ router.patch('/routes/:id',async(req,res)=>{
   .refine(v=>v.intake_enabled||!!v.destination_number).safeParse(req.body);
  if(!parsed.success) return res.status(400).json({error:'An active AI-answering route or forwarding number is required.'});
  const v=parsed.data;
- const result=await db.query(`UPDATE client_phone_numbers SET destination_number=$2,is_active=$3,recovery_enabled=FALSE,
+ const result=await db.query(`UPDATE client_phone_numbers SET destination_number=$2::text,is_active=$3,recovery_enabled=FALSE,
  intake_enabled=COALESCE($4,intake_enabled)
- WHERE id=$1 AND ($2 IS NULL OR twilio_number<>$2) RETURNING *`,[req.params.id,v.destination_number||null,v.is_active,v.intake_enabled ?? null]);
+ WHERE id=$1 AND ($2::text IS NULL OR twilio_number<>$2::text) RETURNING *`,[req.params.id,v.destination_number||null,v.is_active,v.intake_enabled ?? null]);
  if(!result.rowCount) return res.status(400).json({error:'Route not found or forwarding would loop back to the same number.'});res.json(result.rows[0]);
 });
 const followUp=z.object({status:z.enum(['new','in_progress','resolved']),notes:z.string().max(4000)});
