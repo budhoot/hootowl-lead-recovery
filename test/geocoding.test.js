@@ -25,7 +25,7 @@ describe('Google address verification', () => {
     else process.env.GOOGLE_MAPS_API_KEY = priorApiKey;
   });
 
-  it('requires a complete address inside the configured service polygon', async () => {
+  it('accepts a complete US street address within 100 miles of Nocona Hills', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => validResult,
@@ -33,8 +33,21 @@ describe('Google address verification', () => {
     await expect(geocodeServiceAddress('123 Test Street, 76255', fetchImpl))
       .resolves.toEqual({ status: 'inside_area' });
     const requestUrl = new URL(fetchImpl.mock.calls[0][0]);
-    expect(requestUrl.searchParams.get('components')).toBe('country:US|postal_code:76255');
+    expect(requestUrl.searchParams.get('components')).toBe('country:US');
     expect(requestUrl.searchParams.get('key')).toBe('test-maps-key');
+  });
+
+  it('measures the 100-mile service radius, including across the Oklahoma line', async () => {
+    const at = (lat, lng) => jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'OK', results: [{ ...validResult.results[0], geometry: { location: { lat, lng } } }] }),
+    });
+    // About 83 miles south, toward Dallas-Fort Worth.
+    await expect(geocodeServiceAddress('1 Main St', at(32.645, -97.64))).resolves.toEqual({ status: 'inside_area' });
+    // Lawton, Oklahoma, about 68 miles north-west.
+    await expect(geocodeServiceAddress('1 Main St', at(34.6087, -98.3903))).resolves.toEqual({ status: 'inside_area' });
+    // About 104 miles north.
+    await expect(geocodeServiceAddress('1 Main St', at(35.345, -97.64))).resolves.toEqual({ status: 'outside_area' });
   });
 
   it('does not accept a ZIP-only match or a partial result', async () => {

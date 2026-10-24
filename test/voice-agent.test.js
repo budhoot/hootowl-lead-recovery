@@ -12,9 +12,11 @@ const { createBooking, isSlotAvailable, suggestSlots } = require('../src/google-
 const { generateReply } = require('../src/openai-voice');
 const {
   bookVisit,
+  findCallSlots,
   handlePendingConfirmation,
   prepareBooking,
   saveServiceRequest,
+  validateUpgrade,
   websocketUrl,
 } = require('../src/voice-agent');
 
@@ -41,8 +43,44 @@ describe('voice booking assistant', () => {
 
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE voice_agent_sessions'),
-      ['CA1', 'Jordan', 'Plumbing', '123 Test St, Nocona Hills, TX 76255', 'Leaking sink', false],
+      ['CA1', 'Jordan', 'Plumbing', '123 Test St, Nocona Hills, TX 76255', 'Leaking sink', false, true, false],
     );
+  });
+
+  it('saves the lead for a callback when address verification is unavailable', async () => {
+    geocodeServiceAddress.mockRejectedValue(new Error('Google Maps Geocoding is not configured.'));
+    db.query.mockResolvedValue({ rowCount: 1 });
+
+    await expect(saveServiceRequest('CA1', {
+      customer_name: 'Jordan',
+      service_type: 'Plumbing',
+      service_address: '123 Test St, Nocona Hills, TX 76255',
+      issue_description: 'Leaking sink',
+    })).resolves.toMatchObject({ ok: true, booking_available: false, next_step: expect.stringContaining('details are saved') });
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('callback_requested=$8'),
+      ['CA1', 'Jordan', 'Plumbing', '123 Test St, Nocona Hills, TX 76255', 'Leaking sink', false, false, true],
+    );
+  });
+
+  it('never offers times for an unverified address', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{
+      customer_name: 'Jordan', service_type: 'Plumbing', service_address: '123 Test St',
+      issue_description: 'Leak', address_verified: false, call_started_at: new Date().toISOString(),
+    }] });
+    await expect(findCallSlots('CA1')).resolves.toMatchObject({ ok: false, booking_available: false });
+    expect(suggestSlots).not.toHaveBeenCalled();
+  });
+
+  it('flags a callback instead of failing when the calendar is unavailable', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{
+      customer_name: 'Jordan', service_type: 'Plumbing', service_address: '123 Test St',
+      issue_description: 'Leak', address_verified: true, call_started_at: new Date().toISOString(),
+    }] }).mockResolvedValueOnce({ rowCount: 1 });
+    suggestSlots.mockRejectedValue(new Error('Google Calendar OAuth is not configured.'));
+    await expect(findCallSlots('CA1')).resolves.toMatchObject({ ok: false, booking_available: false });
+    expect(db.query).toHaveBeenLastCalledWith(expect.stringContaining('callback_requested=TRUE'), ['CA1']);
   });
 
   it('does not save an address outside the service area', async () => {
@@ -226,4 +264,18 @@ describe('voice booking assistant', () => {
 it('builds a secure ConversationRelay WebSocket URL from the public HTTPS origin', () => {
   expect(websocketUrl('https://api.example.test')).toBe('wss://api.example.test/webhooks/twilio/agent');
   expect(() => websocketUrl('https://api.example.test/unexpected-path')).toThrow(/HTTPS origin/);
+});
+
+it('accepts a WebSocket upgrade signed for the wss:// URL Twilio connects to', () => {
+  const twilio = require('twilio');
+  process.env.TWILIO_AUTH_TOKEN = 'test-token';
+  process.env.TWILIO_PUBLIC_BASE_URL = 'https://api.example.test';
+  const upgrade = (signedUrl) => ({
+    url: '/webhooks/twilio/agent',
+    headers: { 'x-twilio-signature': twilio.getExpectedTwilioSignature('test-token', signedUrl, {}) },
+  });
+  expect(validateUpgrade(upgrade('wss://api.example.test/webhooks/twilio/agent'))).toBe(true);
+  expect(validateUpgrade(upgrade('https://api.example.test/webhooks/twilio/agent'))).toBe(true);
+  expect(validateUpgrade(upgrade('wss://evil.example.test/webhooks/twilio/agent'))).toBe(false);
+  expect(validateUpgrade({ url: '/webhooks/twilio/agent', headers: {} })).toBe(false);
 });

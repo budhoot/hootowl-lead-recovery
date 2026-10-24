@@ -1,4 +1,4 @@
-const { isInNoconaHills } = require('./service-area');
+const { isWithinServiceRadius } = require('./service-area');
 
 async function geocodeServiceAddress(address, fetchImpl = global.fetch) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -6,7 +6,7 @@ async function geocodeServiceAddress(address, fetchImpl = global.fetch) {
 
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('address', address);
-  url.searchParams.set('components', 'country:US|postal_code:76255');
+  url.searchParams.set('components', 'country:US');
   url.searchParams.set('key', apiKey);
 
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(8000) });
@@ -19,21 +19,16 @@ async function geocodeServiceAddress(address, fetchImpl = global.fetch) {
 
   const match = result.results[0];
   const addressTypes = match.types || [];
-  const components = match.address_components || [];
-  const postalCode = components.find((component) => component.types.includes('postal_code'))?.long_name;
-  const state = components.find((component) => component.types.includes('administrative_area_level_1'))?.short_name;
   const location = match.geometry?.location;
   if (
     match.partial_match ||
     !addressTypes.some((type) => type === 'street_address' || type === 'premise' || type === 'subpremise') ||
-    postalCode !== '76255' ||
-    state !== 'TX' ||
     !Number.isFinite(location?.lat) ||
     !Number.isFinite(location?.lng)
   ) {
     return { status: 'not_found' };
   }
-  if (!isInNoconaHills(location.lng, location.lat)) return { status: 'outside_area' };
+  if (!isWithinServiceRadius(location.lng, location.lat)) return { status: 'outside_area' };
   return { status: 'inside_area' };
 }
 

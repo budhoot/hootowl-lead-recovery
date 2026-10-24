@@ -33,6 +33,10 @@ router.patch('/phone-numbers/:id',async(req,res)=>{
  if(!result.rowCount) return res.sendStatus(404);
  res.json(result.rows[0]);
 });
+router.get('/voice-sessions',async(req,res)=>res.json((await db.query(`SELECT s.call_sid,s.caller_number,s.call_started_at,s.status,s.customer_name,s.service_type,
+ s.service_address,s.issue_description,s.risk_flag,s.address_verified,s.callback_requested,s.booked_start,c.name
+ FROM voice_agent_sessions s JOIN client_phone_numbers p ON p.id=s.client_phone_number_id JOIN clients c ON c.id=p.client_id
+ ORDER BY s.created_at DESC LIMIT 100`)).rows));
 router.get('/clients',async(req,res)=>res.json((await db.query(`SELECT p.*,c.name,c.booking_url FROM client_phone_numbers p JOIN clients c ON c.id=p.client_id ORDER BY p.id`)).rows));
 router.get('/leads',async(req,res)=>{
  const clientId=req.query.client_id;

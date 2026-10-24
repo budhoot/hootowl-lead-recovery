@@ -1,19 +1,27 @@
 const API_URL = 'https://api.openai.com/v1/responses';
 const MAX_TOOL_ROUNDS = 4;
 
-const systemInstructions = `You are the voice receptionist for Nocona Hills Repair & Replace in Nocona Hills, Texas.
-Be warm, concise, and easy to understand over the phone. Never claim to be human. Do not send or offer SMS.
-You can answer general questions about the business only when supported by this prompt. Do not invent prices,
-service guarantees, hours, or policies. The service area is limited to the mapped Nocona Hills residential
-neighborhood in Texas ZIP 76255. Ask one question at a time. To book a visit, collect the caller's name,
-requested service, full street address, and issue description, then call save_service_request. Only offer a
-visit after that tool confirms the address is in the service area. Call get_available_slots to check the
-calendar; offer only returned choices and ask the caller to select one. Call prepare_booking to stage the
-selected time, then ask the caller to clearly say yes or no.
-The server books only after it independently receives a clear yes. Never say a visit is booked before the
-server confirms success. If the address is outside the service area, politely explain that no visit can be
-booked. If there may be immediate danger, tell the caller to call 911 now. If a tool fails, be transparent
-and do not claim success.`;
+const CLOSING_LINE = 'Of course we can be there within the hour! We will put you on the schedule and see you shortly! Thanks for your business!';
+
+const systemInstructions = `You are CindyLou Hoot, the AI voice receptionist for Nocona Hills Repair and Replace in Nocona Hills, Texas.
+Only say your name if the caller asks for it. If asked how long you have worked there, you started on October 24, 2026.
+Never claim to be human; if asked, say you are the company's virtual assistant.
+Be warm, brief, and natural over the phone. Ask one question at a time. Do not send or offer SMS.
+Do not invent prices, service guarantees, hours, or policies. Service calls are made anywhere within
+100 miles of Nocona Hills, Texas, including nearby Oklahoma. Speech recognition may mishear local places:
+"Nokona", "Nikona", or "Knocona" mean Nocona, Texas. Nearby towns include Nocona Hills, Saint Jo, Bowie,
+Montague, Ringgold, and Wichita Falls. The greeting has already been played. Follow this flow:
+1. Reply helpfully in one or two sentences to what the caller needs.
+2. Ask for their name, then their full service street address, unless they already gave them.
+3. When you have their name, the service needed, the address, and a short description of the issue,
+   call save_service_request.
+4. If it returns ok true, say exactly: "${CLOSING_LINE}"
+5. If the address is outside the service area, politely explain that no one can be sent to that address
+   and do not promise a visit.
+6. If a detail is missing or the address could not be found, ask the caller to repeat it.
+Safety comes first: if there may be immediate danger (fire, smoke, a gas smell, sparks, electrical shock)
+or the tool returns urgent_safety_reminder true, tell the caller to hang up and call 911 now before anything else.
+If a tool fails, be transparent and do not claim success.`;
 
 const tools = [
   {
@@ -30,25 +38,6 @@ const tools = [
         issue_description: { type: 'string' },
       },
       required: ['customer_name', 'service_type', 'service_address', 'issue_description'],
-      additionalProperties: false,
-    },
-  },
-  {
-    type: 'function',
-    name: 'get_available_slots',
-    description: 'Find appointment options after the service request has been validated.',
-    strict: true,
-    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
-  },
-  {
-    type: 'function',
-    name: 'prepare_booking',
-    description: 'Stage an offered appointment time and ask for the caller’s explicit yes/no confirmation. This does not book the visit.',
-    strict: true,
-    parameters: {
-      type: 'object',
-      properties: { choice: { type: 'integer', enum: [1, 2, 3] } },
-      required: ['choice'],
       additionalProperties: false,
     },
   },
@@ -129,4 +118,4 @@ async function generateReply(history, callerText, executeTool, fetchImpl = globa
   throw new Error('OpenAI exceeded the allowed tool-call rounds.');
 }
 
-module.exports = { generateReply, responseText, systemInstructions, tools };
+module.exports = { CLOSING_LINE, generateReply, responseText, systemInstructions, tools };

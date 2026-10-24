@@ -90,7 +90,7 @@ describe('Twilio voice webhooks', () => {
     expect(response.text).toContain('<Pause length="6"/>');
     expect(response.text).toContain('<ConversationRelay');
     expect(response.text).toContain('wss://api.example.test/webhooks/twilio/agent');
-    expect(response.text).toContain('How may Nocona Hills Repair &amp; Replace help you today?');
+    expect(response.text).toContain('Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?');
     expect(response.text).not.toContain('<Dial');
     expect(response.text).not.toContain('<Message');
     expect(db.query.mock.calls[1][0]).toContain('INSERT INTO voice_agent_sessions');

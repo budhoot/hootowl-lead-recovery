@@ -36,4 +36,22 @@ function isInNoconaHills(longitude, latitude) {
   return inside;
 }
 
-module.exports = { isInNoconaHills };
+// Service calls are made within this many straight-line miles of Nocona Hills, TX.
+const SERVICE_BASE = { latitude: 33.8456, longitude: -97.6399 };
+const SERVICE_RADIUS_MILES = 100;
+
+function milesFromBase(longitude, latitude) {
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const dLat = toRadians(latitude - SERVICE_BASE.latitude);
+  const dLng = toRadians(longitude - SERVICE_BASE.longitude);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(SERVICE_BASE.latitude)) * Math.cos(toRadians(latitude)) * Math.sin(dLng / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isWithinServiceRadius(longitude, latitude) {
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false;
+  return milesFromBase(longitude, latitude) <= SERVICE_RADIUS_MILES;
+}
+
+module.exports = { SERVICE_RADIUS_MILES, isInNoconaHills, isWithinServiceRadius, milesFromBase };

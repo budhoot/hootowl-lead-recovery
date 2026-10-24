@@ -8,7 +8,9 @@ const { formatSlot } = require('./booking');
 const { generateReply } = require('./openai-voice');
 
 const SOCKET_PATH = '/webhooks/twilio/agent';
-const GREETING = 'How may Nocona Hills Repair & Replace help you today?';
+const GREETING = 'Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?';
+const UNVERIFIED_STEP = 'The details are saved. The address could not be checked automatically, so treat it as inside the service area.';
+const CALLBACK_STEP = 'The details are saved but online booking is unavailable right now. Tell the caller a team member will call them back to schedule. Do not offer appointment times.';
 
 function websocketUrl(publicBaseUrl) {
   const base = new URL(publicBaseUrl);
@@ -36,8 +38,11 @@ function validateUpgrade(request) {
   try {
     const base = new URL(publicBaseUrl);
     if (base.protocol !== 'https:' || base.pathname !== '/' || base.search || base.hash) return false;
-    const requestUrl = new URL(request.url, base).toString();
-    return twilio.validateRequest(authToken, signature, requestUrl, {});
+    // Twilio signs the wss:// URL it was given; also accept the https:// form of the same endpoint.
+    const requestUrl = new URL(request.url, base);
+    if (twilio.validateRequest(authToken, signature, requestUrl.toString(), {})) return true;
+    requestUrl.protocol = 'wss:';
+    return twilio.validateRequest(authToken, signature, requestUrl.toString(), {});
   } catch {
     return false;
   }
@@ -83,9 +88,17 @@ async function saveServiceRequest(callSid, args) {
   }
 
   const address = args.service_address.trim();
-  const geocoding = await geocodeServiceAddress(address);
+  // If verification itself is unavailable, keep the lead and hand it to a person instead of losing it.
+  let geocoding;
+  try {
+    geocoding = await geocodeServiceAddress(address);
+  } catch (error) {
+    console.error('Address verification unavailable:', error.message);
+    geocoding = { status: 'unavailable' };
+  }
+  const verified = geocoding.status !== 'unavailable';
   if (geocoding.status === 'not_found') {
-    return { ok: false, reason: 'Could not verify a full street address in Texas ZIP 76255.' };
+    return { ok: false, reason: 'Could not verify a full street address.' };
   }
   if (geocoding.status === 'outside_area') {
     return { ok: false, reason: 'Address is outside the Nocona Hills service area; do not book.' };
@@ -97,7 +110,7 @@ async function saveServiceRequest(callSid, args) {
   const result = await db.query(
     `UPDATE voice_agent_sessions
      SET customer_name=$2,service_type=$3,service_address=$4,issue_description=$5,
-         risk_flag=$6,updated_at=NOW()
+         risk_flag=$6,address_verified=$7,callback_requested=$8,updated_at=NOW()
      WHERE call_sid=$1 AND status='active'`,
     [
       callSid,
@@ -106,9 +119,12 @@ async function saveServiceRequest(callSid, args) {
       address,
       issue,
       riskFlag,
+      verified,
+      !verified,
     ],
   );
   if (!result.rowCount) throw new Error('Voice session is no longer active.');
+  if (!verified) return { ok: true, booking_available: false, urgent_safety_reminder: riskFlag, next_step: UNVERIFIED_STEP };
   return { ok: true, in_service_area: true, urgent_safety_reminder: riskFlag };
 }
 
@@ -118,7 +134,18 @@ async function findCallSlots(callSid) {
     return { ok: false, reason: 'Service details have not been saved and verified.' };
   }
   if (call.google_event_id) return { ok: false, reason: 'A visit is already booked for this call.' };
-  const slots = await suggestSlots(new Date(call.call_started_at));
+  if (!call.address_verified) return { ok: false, booking_available: false, next_step: CALLBACK_STEP };
+  let slots;
+  try {
+    slots = await suggestSlots(new Date(call.call_started_at));
+  } catch (error) {
+    console.error('Calendar unavailable:', error.message);
+    await db.query(
+      'UPDATE voice_agent_sessions SET callback_requested=TRUE,updated_at=NOW() WHERE call_sid=$1',
+      [callSid],
+    );
+    return { ok: false, booking_available: false, next_step: CALLBACK_STEP };
+  }
   if (!slots.length) return { ok: false, reason: 'No open appointment options were found in the next 14 days.' };
   await db.query(
     'UPDATE voice_agent_sessions SET offered_slots=$2,updated_at=NOW() WHERE call_sid=$1 AND status=$3',
