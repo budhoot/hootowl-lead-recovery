@@ -7,6 +7,7 @@ const { createBooking, isSlotAvailable, suggestSlots } = require('./google-calen
 const { formatSlot } = require('./booking');
 const { generateReply } = require('./openai-voice');
 const agentProfile = require('./agent-profile');
+const leadEmail = require('./lead-email');
 
 const SOCKET_PATH = '/webhooks/twilio/agent';
 const UNVERIFIED_STEP = 'The details are saved. The address could not be checked automatically, so treat it as inside the service area.';
@@ -127,6 +128,8 @@ async function saveServiceRequest(callSid, args, area) {
     ],
   );
   if (!result.rowCount) throw new Error('Voice session is no longer active.');
+  // Email the contractor the saved request. Not awaited: it never throws and never slows the call.
+  leadEmail.notifyCapturedRequest(callSid);
   if (!verified) return { ok: true, booking_available: false, urgent_safety_reminder: riskFlag, next_step: UNVERIFIED_STEP };
   return { ok: true, in_service_area: true, urgent_safety_reminder: riskFlag };
 }

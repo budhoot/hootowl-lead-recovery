@@ -1,7 +1,7 @@
 'use strict';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let workspace, leads = { calls: [], replies: [] }, view = 'home', filter = 'open', leadId, requestId = 0, installPrompt;
+let workspace, leads = { calls: [], replies: [] }, captured = [], view = 'home', filter = 'open', leadId, requestId = 0, installPrompt;
 let invitation = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (invitation) history.replaceState(null, '', location.pathname);
 const titles = { home: 'A good day starts here.', inbox: 'Every conversation matters.', business: 'Make yourself at home.', receptionist: 'Your voice, on every call.', plan: 'Your plan, your number, your security.', preferences: 'A space that feels like you.', install: 'Your business. In your pocket.' };
@@ -15,7 +15,7 @@ const empty = (title, message) => `<div class="empty"><div class="empty-icon" ar
 function feedback(message, isError = false) { $('#feedback').textContent = message; $('#feedback').className = isError ? 'error' : ''; $('#feedback').hidden = false; }
 function applyTheme(user) { for (const key of ['theme', 'accent', 'density']) document.documentElement.dataset[key] = user[key]; }
 function showLogin() {
- requestId++; workspace = null; planData = null; receptionistData = null; newSecret = null; newCodes = null; challenge = null; leads = { calls: [], replies: [] }; $('#content').replaceChildren();
+ requestId++; workspace = null; planData = null; receptionistData = null; newSecret = null; newCodes = null; challenge = null; leads = { calls: [], replies: [] }; captured = []; $('#content').replaceChildren();
  $('#twofa-form').hidden = true;
  $('#app').hidden = true; $('#auth-screen').hidden = false; $('#signin-form').hidden = false; $('#join-form').hidden = true;
  $('#auth-title').textContent = 'Welcome back.'; $('#auth-description').textContent = 'Sign in to pick up where you left off.';
@@ -44,9 +44,9 @@ function updateIdentity() {
 async function refresh() {
  const current = ++requestId; $('#refresh').disabled = true; $('#content').setAttribute('aria-busy', 'true');
  try {
-  const [nextWorkspace, nextLeads] = await Promise.all([api('/workspace'), api('/leads')]);
+  const [nextWorkspace, nextLeads, nextCaptured] = await Promise.all([api('/workspace'), api('/leads'), api('/captured').catch(() => ({ requests: [] }))]);
   if (current !== requestId) return;
-  workspace = nextWorkspace; leads = nextLeads;
+  workspace = nextWorkspace; leads = nextLeads; captured = nextCaptured.requests || [];
   $('#auth-screen').hidden = true; $('#app').hidden = false; updateIdentity(); render();
   $('#last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
  } catch (error) {
@@ -60,7 +60,7 @@ function navigate(next) {
 function render() {
  $('#page-title').textContent = titles[view]; $('#page-kicker').textContent = labels[view];
  document.querySelectorAll('nav button').forEach(b => { b.classList.toggle('active', b.dataset.view === view); if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
- $('#content').innerHTML = ({ home, inbox, business, receptionist, plan, preferences, install })[view]();
+ $('#content').innerHTML = ({ home, inbox: inboxPage, business, receptionist, plan, preferences, install })[view]();
  if (view === 'plan' && !planData) loadPlan();
  if (view === 'receptionist' && !receptionistData) loadReceptionist();
  bindForms();
@@ -116,9 +116,17 @@ function home() {
  <div class="grid"><section class="card"><div class="section-heading"><h2>Your latest activity</h2><button class="text-button" data-view="inbox">View inbox →</button></div>${leads.calls.length ? leads.calls.slice(0, 3).map(c => `<div class="check-row"><span class="check" aria-hidden="true">↙</span><div><h3>${esc(c.caller_number)}</h3><p>${esc(date(c.created_at))} · ${esc(statusLabel(c.follow_up_status))}</p></div></div>`).join('') : empty('A clear inbox. A fresh start.', 'New calls will appear here when your phone route is connected. No leads have been received yet.')}</section>
  <section class="card"><div class="section-heading"><h2>Your setup checklist</h2>${badge(ready ? 'Profile ready' : 'Getting started')}</div>${checkRow(true, 'Your account is ready', 'Your own sign-in and business workspace.')}${checkRow(ready, 'Tell us about your business', ready ? 'Business profile saved.' : 'Add your contact name and confirm your business details.')}${checkRow(workspace.routes.length > 0, 'Connect your business number', workspace.routes.length ? 'Review where incoming calls should ring.' : 'Ask your operator to assign a phone number.')}${checkRow(active, 'AI voice answering', active ? 'The voice assistant is enabled for an active route.' : 'Ask your operator to configure and test the voice assistant.')}<button class="text-button" data-view="install">Add HootOwl to your phone →</button></section></div>`;
 }
+function capturedCard(r) {
+ const flags = [r.risk_flag ? badge('Possible safety issue', true) : '', r.callback_requested || !r.address_verified ? badge('Call back to confirm', true) : '', r.booked_start ? badge('Visit booked') : ''].join('');
+ return `<article class="lead-card"><div class="lead-main"><strong>${esc(r.customer_name)}</strong> · <a href="tel:${esc(r.caller_number)}">${esc(r.caller_number)}</a><div class="lead-meta"><span>${esc(date(r.created_at))}</span>${flags}</div><p class="lead-note">${esc(r.service_type)}\n${esc(r.service_address)}\n${esc(r.issue_description)}</p></div></article>`;
+}
 function inbox() {
  const shown = leads.calls.filter(c => filter === 'all' || (filter === 'resolved' ? c.follow_up_status === 'resolved' : c.follow_up_status !== 'resolved'));
  return `<div class="tabs" aria-label="Call inbox filter">${[['open', 'Open calls'], ['all', 'All calls'], ['resolved', 'Resolved']].map(([value, label]) => `<button data-filter="${value}" class="${filter === value ? 'active' : ''}" aria-pressed="${filter === value}">${label}</button>`).join('')}</div><p class="muted small">Showing up to the latest 200 call follow-ups. Times are shown in ${esc(workspace.business.timezone)}.</p><div class="lead-list">${shown.length ? shown.map(c => `<article class="lead-card"><div class="lead-main"><a href="tel:${esc(c.caller_number)}">${esc(c.caller_number)}</a><div class="lead-meta"><span>${esc(date(c.created_at))}</span>${badge(statusLabel(c.follow_up_status))}</div>${c.customer_notes ? `<p class="lead-note">${esc(c.customer_notes)}</p>` : ''}</div><button class="secondary" data-lead="${esc(c.call_sid)}">Follow up</button></article>`).join('') : `<section class="card">${empty(filter === 'resolved' ? 'No resolved calls yet.' : 'You’re all caught up.', 'Calls that need follow-up will appear here.')}</section>`}</div>`;
+}
+function inboxPage() {
+ const answered = `<div class="section-heading"><h2>Calls your AI receptionist answered</h2></div><p class="muted small">Newest first, up to the latest 200. Times are shown in ${esc(workspace.business.timezone)}.</p><div class="lead-list">${captured.length ? captured.map(capturedCard).join('') : `<section class="card">${empty('No answered calls yet.', 'When your AI receptionist takes a call, the caller’s name, number, address and problem appear here.')}</section>`}</div>`;
+ return answered + `<div class="section-heading"><h2>Missed calls forwarded to your phone</h2></div>` + inbox();
 }
 function business() {
  const b = workspace.business;
