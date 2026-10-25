@@ -29,6 +29,19 @@ router.get('/billing/unmatched', async (req, res) => {
  res.json((await db.query(`SELECT id,event_type,payload->>'buyer_email' AS buyer_email,payload->>'plan_id' AS plan_id,received_at
  FROM billing_events WHERE outcome='unmatched' ORDER BY received_at DESC LIMIT 200`)).rows);
 });
+// Daily Wix check (src/reconcile.js). Report only: it reads Wix and the database and never changes a subscription.
+router.get('/billing/reconcile-report', async (req, res) => {
+ const reconcile = require('../reconcile');
+ const cfg = reconcile.config();
+ res.json({ configured: cfg.ok, missing: cfg.missing, latest: await reconcile.latestRun() });
+});
+router.post('/billing/reconcile-report/run', async (req, res) => {
+ const reconcile = require('../reconcile');
+ const cfg = reconcile.config();
+ if (!cfg.ok) return res.status(409).json({ error: 'The Wix check is not set up yet. Missing: ' + cfg.missing.join(', ') + '.' });
+ const run = await reconcile.runReconciliation();
+ res.json({ status: run.status, error: run.error || null, findings: (run.findings || []).length });
+});
 router.post('/billing/reconcile', async (req, res) => {
  res.json(await require('../billing').reconcileUnmatched());
 });

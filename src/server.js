@@ -52,6 +52,7 @@ if (require.main === module) {
   server.listen(port, process.env.HOST || '127.0.0.1', () => {
     console.log(`HootOwl Lead Recovery API listening on port ${port}`);
     require('./billing').assertPlanConfig();
+    require('./reconcile').startSchedule();
   });
 }
 
