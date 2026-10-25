@@ -15,9 +15,19 @@ function allowedPlans() {
   return (process.env.WIX_PLAN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// Fails closed: an empty or unset WIX_PLAN_IDS knows no plan, so every plan event is stored as ignored and nothing is provisioned.
 function isKnownPlan(planId) {
   const plans = allowedPlans();
-  return plans.length === 0 || plans.includes(planId);
+  return plans.length > 0 && plans.includes(planId);
+}
+
+// Called once at server startup. Logs a loud error when no plan is allowed, because every plan event will then be ignored.
+function assertPlanConfig() {
+  if (allowedPlans().length === 0) {
+    console.error('FATAL CONFIG: WIX_PLAN_IDS is empty or unset. Every Wix plan event will be IGNORED and no client will be provisioned. Set WIX_PLAN_IDS to the comma-separated Wix Pricing Plans plan IDs that grant access.');
+    return false;
+  }
+  return true;
 }
 
 async function findClientByEmail(email) {
@@ -81,4 +91,4 @@ async function reconcileUnmatched() {
   return { applied };
 }
 
-module.exports = { EVENT_TYPES, applyWixEvent, isKnownPlan, isSubscriptionActive, reconcileUnmatched };
+module.exports = { EVENT_TYPES, applyWixEvent, assertPlanConfig, isKnownPlan, isSubscriptionActive, reconcileUnmatched };

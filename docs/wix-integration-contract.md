@@ -54,7 +54,7 @@ Status changes to or from `active` suspend or reactivate the customer's Twilio s
 
 `unmatched` means no customer has that email yet. The event is stored and applied automatically
 once the customer exists (operators can also press "Reconcile now"). `ignored` means the plan ID
-is not in `WIX_PLAN_IDS`.
+is not in `WIX_PLAN_IDS`, or `WIX_PLAN_IDS` is empty or unset (an empty list rejects every plan).
 
 ## Example (redacted)
 ```json
@@ -89,7 +89,7 @@ For `plan_purchased` from an email with no HootOwl account, the app creates a wo
 after the buyer and a 7-day portal invitation. The response carries the link to email:
 `{ "accepted": true, "duplicate": false, "outcome": "applied", "invited": true, "onboarding_link": "https://…/portal/#invite=…" }`.
 Existing accounts get `invited: false` and the portal sign-in address. A retried order returns 200
-and a fresh link. Plans not in `WIX_PLAN_IDS` are ignored and create nothing.
+and a fresh link. Plans not in `WIX_PLAN_IDS` are ignored and create nothing. An empty or unset `WIX_PLAN_IDS` ignores every plan, and the server logs an error at startup.
 
 ## Open items for Wix Symphony to confirm
 1. The exact Wix event names it can emit, and how they map to the event types above.
