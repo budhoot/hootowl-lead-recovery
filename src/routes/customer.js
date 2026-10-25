@@ -38,6 +38,7 @@ router.post('/register', authLimit, async (req, res) => {
   await connection.query('UPDATE customer_invites SET used_at=NOW() WHERE token_hash=$1', [hash(v.token)]);
   await auth.issueSession(req, res, user.id, connection);
   await connection.query('COMMIT');
+  await require('../onboarding').warnOnBuyerEmailMismatch(invitation.client_id, invitation.email);
   res.status(201).json({ authenticated: true });
  } catch (error) {
   await connection.query('ROLLBACK');
