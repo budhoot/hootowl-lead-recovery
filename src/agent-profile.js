@@ -17,15 +17,16 @@ const DEFAULT_VOICE = 'UgBBYS2sOqTuMpoF3BR0';
 const flat = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 const quoted = (value) => flat(value).replace(/"/g, "'");
 
+// A profile with a center gets its own radius; a profile without one has no distance limit (null) rather than
+// inheriting the default; only a caller with no profile at all keeps the original default area.
 function serviceArea(row) {
-  const lat = Number(row?.agent_service_latitude);
-  const lng = Number(row?.agent_service_longitude);
   const radius = Number(row?.agent_service_radius_miles);
-  return {
-    latitude: Number.isFinite(lat) && row?.agent_service_latitude != null ? lat : SERVICE_BASE.latitude,
-    longitude: Number.isFinite(lng) && row?.agent_service_longitude != null ? lng : SERVICE_BASE.longitude,
-    radiusMiles: Number.isInteger(radius) && radius > 0 ? radius : SERVICE_RADIUS_MILES,
-  };
+  const radiusMiles = Number.isInteger(radius) && radius > 0 ? radius : SERVICE_RADIUS_MILES;
+  if (row?.agent_service_latitude != null && row?.agent_service_longitude != null) {
+    return { latitude: Number(row.agent_service_latitude), longitude: Number(row.agent_service_longitude), radiusMiles };
+  }
+  const hasProfile = typeof row?.agent_ready === 'boolean';
+  return hasProfile ? null : { ...SERVICE_BASE, radiusMiles };
 }
 
 function relaySettings(row) {
@@ -53,7 +54,8 @@ function buildInstructions(row) {
     'Never claim to be human; if asked, say you are the company\'s virtual assistant.',
     'Be warm, brief, and natural over the phone. Ask one question at a time. Do not send or offer SMS.',
     'Do not invent prices, service guarantees, hours, or policies.',
-    areaLabel ? `Service calls are made anywhere within ${area.radiusMiles} miles of ${areaLabel}.` : '',
+    areaLabel && area ? `Service calls are made anywhere within ${area.radiusMiles} miles of ${areaLabel}.` : '',
+    areaLabel && !area ? `The service area is ${areaLabel}.` : '',
     services ? `Services offered: ${services}` : '',
     hints,
     'The greeting has already been played. Follow this flow:',

@@ -68,6 +68,13 @@ async function tokenForAccount(accountSid) {
   return row?.credential_ref ? secrets.decrypt(row.credential_ref) : null;
 }
 
+// Twilio client for the account that owns a customer's numbers: its own subaccount once provisioned, else HootOwl's.
+async function clientForCustomer(clientId) {
+  const row = (await db.query(`SELECT subaccount_sid,credential_ref FROM twilio_provisioning WHERE client_id=$1 AND status='active'`, [clientId])).rows[0];
+  if (row?.subaccount_sid && row.credential_ref) return clientFactory(row.subaccount_sid, secrets.decrypt(row.credential_ref));
+  return clientFactory(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+}
+
 // Suspends a subaccount when the customer's subscription ends so it cannot keep incurring charges.
 async function setSubaccountStatus(clientId, status) {
   const row = (await db.query('SELECT subaccount_sid FROM twilio_provisioning WHERE client_id=$1', [clientId])).rows[0];
@@ -76,4 +83,4 @@ async function setSubaccountStatus(clientId, status) {
   return { ok: true };
 }
 
-module.exports = { requestProvisioning, provision, tokenForAccount, setSubaccountStatus, setClientFactory };
+module.exports = { requestProvisioning, provision, tokenForAccount, setSubaccountStatus, setClientFactory, clientForCustomer };

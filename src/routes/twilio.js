@@ -207,6 +207,45 @@ router.post('/recording-status', express.urlencoded({ extended: false }), valida
   }
 });
 
+// Answered preview call placed from the customer portal: From is the customer's HootOwl number, To is their own phone.
+router.post('/preview', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
+  const { CallSid: callSid, From: twilioNumber, To: customerPhone } = req.body;
+  if (!callSid || !twilioNumber || !customerPhone) return res.status(400).json({ error: 'Preview webhook is missing call details.' });
+  try {
+    const route = (await db.query(
+      `SELECT p.id,c.name,${agentProfile.PROFILE_COLUMNS}
+       FROM client_phone_numbers p JOIN clients c ON c.id=p.client_id
+       LEFT JOIN agent_profiles a ON a.client_id=c.id
+       WHERE p.twilio_number=$1`,
+      [twilioNumber],
+    )).rows[0];
+    const response = createTwiML();
+    if (!route || typeof route.agent_ready !== 'boolean') {
+      response.say('Your AI receptionist has not been set up yet. Save it in your HootOwl workspace and try again.');
+      response.hangup();
+      return sendTwiML(res, response);
+    }
+    await db.query(
+      `INSERT INTO voice_agent_sessions(call_sid,client_phone_number_id,caller_number,is_preview)
+       VALUES($1,$2,$3,TRUE) ON CONFLICT(call_sid) DO NOTHING`,
+      [callSid, route.id, customerPhone],
+    );
+    const relay = agentProfile.relaySettings(route);
+    response.connect({ action: callbackUrl('/webhooks/twilio/conversation-ended'), method: 'POST' }).conversationRelay({
+      url: voiceAgent.websocketUrl(process.env.TWILIO_PUBLIC_BASE_URL),
+      welcomeGreeting: relay.welcomeGreeting,
+      welcomeGreetingInterruptible: 'any',
+      language: 'en-US',
+      ttsProvider: relay.ttsProvider,
+      voice: relay.voice,
+    });
+    return sendTwiML(res, response);
+  } catch (error) {
+    console.error('Failed to start receptionist preview:', error.code || error.name);
+    return res.status(500).json({ error: 'Unable to start preview.' });
+  }
+});
+
 router.post('/conversation-ended', express.urlencoded({ extended: false }), validateTwilioWebhook, async (req, res) => {
   const { CallSid: callSid } = req.body;
   if (!callSid) return res.status(400).json({ error: 'Conversation callback is missing CallSid.' });

@@ -4,6 +4,7 @@ const db = require('../db');
 const { hash } = require('../auth');
 const auth = require('../customer-auth');
 const twoFactor = require('./customer-2fa');
+const { VOICES: voices, isAllowedVoice } = require('../voices');
 const router = express.Router();
 router.use(express.json({ limit: '16kb' }), auth.protectWrite);
 const authLimit = require('express-rate-limit').rateLimit({ windowMs: 15 * 60000, limit: 30, message: { error: 'Too many attempts. Please wait 15 minutes before trying again.' } });
@@ -84,6 +85,59 @@ router.get('/workspace', async (req, res) => {
  const client = (await db.query('SELECT id,name,booking_url,contact_name,timezone,onboarding_completed_at FROM clients WHERE id=$1', [req.customer.client_id])).rows[0];
  const routes = (await db.query('SELECT id,twilio_number,destination_number,is_active,intake_enabled FROM client_phone_numbers WHERE client_id=$1 ORDER BY id', [req.customer.client_id])).rows;
  res.json({ user: req.customer, business: client, routes, voice_only: true });
+});
+const PREVIEWS_PER_DAY = 10;
+const receptionistText = (min, max) => z.string().trim().min(min).max(max);
+async function previewsToday(clientId) {
+ const { rows } = await db.query(`SELECT count(*)::int AS n FROM voice_agent_sessions s JOIN client_phone_numbers p ON p.id=s.client_phone_number_id
+ WHERE p.client_id=$1 AND s.is_preview AND s.created_at>NOW()-INTERVAL '24 hours'`, [clientId]);
+ return rows[0].n;
+}
+router.get('/receptionist', async (req, res) => {
+ const clientId = req.customer.client_id;
+ const profile = (await db.query(`SELECT assistant_name,business_name,name_only_when_asked,to_char(started_on,'YYYY-MM-DD') AS started_on,greeting,closing_line,
+ services,service_radius_miles,service_area_label,place_hints,voice_id,ready,(service_latitude IS NOT NULL) AS has_service_center
+ FROM agent_profiles WHERE client_id=$1`, [clientId])).rows[0] || null;
+ const routes = (await db.query('SELECT id,twilio_number,destination_number,is_active,intake_enabled FROM client_phone_numbers WHERE client_id=$1 ORDER BY id', [clientId])).rows;
+ res.json({ profile, voices, routes, previews_left: Math.max(0, PREVIEWS_PER_DAY - await previewsToday(clientId)) });
+});
+// Customers edit what their assistant says and sounds like; the service center and AI answering stay with HootOwl.
+router.put('/receptionist', async (req, res) => {
+ const parsed = z.object({ assistant_name: receptionistText(1, 60), business_name: receptionistText(1, 120), name_only_when_asked: z.boolean(),
+  started_on: z.union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]), greeting: receptionistText(1, 300), closing_line: receptionistText(0, 300),
+  services: receptionistText(0, 1000), service_area_label: receptionistText(0, 200), service_radius_miles: z.number().int().min(1).max(500),
+  place_hints: receptionistText(0, 600), voice_id: z.string().max(100), ready: z.boolean() }).strict().safeParse(req.body);
+ if (!parsed.success) return res.status(400).json({ error: 'Check each field: names, greeting, and closing line have length limits, and the radius is 1 to 500 miles.' });
+ const v = parsed.data, clientId = req.customer.client_id;
+ const current = (await db.query('SELECT voice_id FROM agent_profiles WHERE client_id=$1', [clientId])).rows[0];
+ if (!isAllowedVoice(v.voice_id, current?.voice_id)) return res.status(400).json({ error: 'Choose one of the listed voices.' });
+ await db.query(`INSERT INTO agent_profiles(client_id,assistant_name,business_name,name_only_when_asked,started_on,greeting,closing_line,services,
+ service_area_label,service_radius_miles,place_hints,tts_provider,voice_id,ready)
+ VALUES($1,$2,$3,$4,NULLIF($5,'')::date,$6,$7,$8,$9,$10,$11,'ElevenLabs',$12,$13)
+ ON CONFLICT(client_id) DO UPDATE SET assistant_name=EXCLUDED.assistant_name,business_name=EXCLUDED.business_name,
+ name_only_when_asked=EXCLUDED.name_only_when_asked,started_on=EXCLUDED.started_on,greeting=EXCLUDED.greeting,closing_line=EXCLUDED.closing_line,
+ services=EXCLUDED.services,service_area_label=EXCLUDED.service_area_label,service_radius_miles=EXCLUDED.service_radius_miles,
+ place_hints=EXCLUDED.place_hints,tts_provider=EXCLUDED.tts_provider,voice_id=EXCLUDED.voice_id,ready=EXCLUDED.ready,updated_at=NOW()`,
+ [clientId, v.assistant_name, v.business_name, v.name_only_when_asked, v.started_on, v.greeting, v.closing_line, v.services,
+  v.service_area_label, v.service_radius_miles, v.place_hints, v.voice_id, v.ready]);
+ res.json({ saved: true });
+});
+// Calls the customer's own forwarding phone from their HootOwl number so they can talk to their assistant.
+router.post('/receptionist/preview', authLimit, async (req, res) => {
+ const clientId = req.customer.client_id;
+ const route = (await db.query(`SELECT p.twilio_number,p.destination_number FROM client_phone_numbers p JOIN agent_profiles a ON a.client_id=p.client_id
+ WHERE p.client_id=$1 AND p.destination_number IS NOT NULL ORDER BY p.id LIMIT 1`, [clientId])).rows[0];
+ if (!route) return res.status(409).json({ error: 'Save your AI receptionist and a forwarding phone number first. We call that phone for the preview.' });
+ if (await previewsToday(clientId) >= PREVIEWS_PER_DAY) return res.status(429).json({ error: 'You have used today’s preview calls. Please try again tomorrow.' });
+ try {
+  const twilioClient = await require('../provisioning').clientForCustomer(clientId);
+  await twilioClient.calls.create({ to: route.destination_number, from: route.twilio_number, timeout: 30,
+   url: new URL('/webhooks/twilio/preview', process.env.TWILIO_PUBLIC_BASE_URL).toString(), method: 'POST' });
+  res.status(202).json({ calling: route.destination_number.slice(0, -4).replace(/\d/g, '•') + route.destination_number.slice(-4) });
+ } catch (error) {
+  console.error('Unable to place receptionist preview call:', error.code || error.name);
+  res.status(502).json({ error: 'We could not place the preview call right now. Please try again in a few minutes.' });
+ }
 });
 router.patch('/business', async (req, res) => {
  const parsed = z.object({ name: displayName, contact_name: displayName,

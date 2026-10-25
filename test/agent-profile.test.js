@@ -64,6 +64,24 @@ describe('AI receptionist profiles', () => {
     expect(lines.findIndex(l => l.startsWith('Safety comes first'))).toBeGreaterThan(lines.findIndex(l => l.startsWith('Services offered')));
   });
 
+  it('sets no distance limit for a profile without a service center instead of borrowing the default area', () => {
+    const row = { agent_ready: false, agent_service_area_label: 'Austin, Texas', agent_service_radius_miles: 40 };
+    expect(serviceArea(row)).toBeNull();
+    const text = buildInstructions(row);
+    expect(text).toContain('The service area is Austin, Texas.');
+    expect(text).not.toContain('within 40 miles');
+  });
+
+  it('lets customers pick only the listed voices or keep the one they have', () => {
+    const { VOICES, isAllowedVoice } = require('../src/voices');
+    expect(VOICES).toHaveLength(6);
+    expect(new Set(VOICES.map(v => v.id)).size).toBe(6);
+    expect(isAllowedVoice(VOICES[2].id, null)).toBe(true);
+    expect(isAllowedVoice('aEO01A4wXwd1O8GPgGlF', 'aEO01A4wXwd1O8GPgGlF')).toBe(true);
+    expect(isAllowedVoice('someOtherVoice', 'aEO01A4wXwd1O8GPgGlF')).toBe(false);
+    expect(isAllowedVoice('', null)).toBe(false);
+  });
+
   it('falls back to safe defaults when no profile exists', () => {
     const text = buildInstructions({});
     expect(text).toContain('You are the virtual assistant, the AI voice receptionist for this business.');

@@ -28,7 +28,8 @@ async function geocodeServiceAddress(address, fetchImpl = global.fetch, area) {
   ) {
     return { status: 'not_found' };
   }
-  if (!isWithinServiceRadius(location.lng, location.lat, area)) return { status: 'outside_area' };
+  // area: undefined = default area, null = this business sets no distance limit.
+  if (area !== null && !isWithinServiceRadius(location.lng, location.lat, area)) return { status: 'outside_area' };
   return { status: 'inside_area' };
 }
 

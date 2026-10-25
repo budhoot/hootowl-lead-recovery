@@ -4,9 +4,9 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 let workspace, leads = { calls: [], replies: [] }, view = 'home', filter = 'open', leadId, requestId = 0, installPrompt;
 let invitation = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (invitation) history.replaceState(null, '', location.pathname);
-const titles = { home: 'A good day starts here.', inbox: 'Every conversation matters.', business: 'Make yourself at home.', plan: 'Your plan, your number, your security.', preferences: 'A space that feels like you.', install: 'Your business. In your pocket.' };
-const labels = { home: 'YOUR WORKSPACE', inbox: 'YOUR LEAD INBOX', business: 'BUSINESS SETTINGS', plan: 'PLAN & SECURITY', preferences: 'APPEARANCE & ACCOUNT', install: 'TAKE HOOTOWL WITH YOU' };
-let planData = null, newSecret = null, newCodes = null, challenge = null;
+const titles = { home: 'A good day starts here.', inbox: 'Every conversation matters.', business: 'Make yourself at home.', receptionist: 'Your voice, on every call.', plan: 'Your plan, your number, your security.', preferences: 'A space that feels like you.', install: 'Your business. In your pocket.' };
+const labels = { home: 'YOUR WORKSPACE', inbox: 'YOUR LEAD INBOX', business: 'BUSINESS SETTINGS', receptionist: 'AI RECEPTIONIST', plan: 'PLAN & SECURITY', preferences: 'APPEARANCE & ACCOUNT', install: 'TAKE HOOTOWL WITH YOU' };
+let planData = null, receptionistData = null, newSecret = null, newCodes = null, challenge = null;
 const statusLabel = value => ({ new: 'New', in_progress: 'Following up', resolved: 'Resolved' }[value] || value);
 function date(value) { return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: workspace.business.timezone, hour12: workspace.user.time_format === '12' }).format(new Date(value)); }
 const initials = name => name.split(/\s+/).slice(0, 2).map(v => v[0]).join('').toUpperCase();
@@ -15,7 +15,7 @@ const empty = (title, message) => `<div class="empty"><div class="empty-icon" ar
 function feedback(message, isError = false) { $('#feedback').textContent = message; $('#feedback').className = isError ? 'error' : ''; $('#feedback').hidden = false; }
 function applyTheme(user) { for (const key of ['theme', 'accent', 'density']) document.documentElement.dataset[key] = user[key]; }
 function showLogin() {
- requestId++; workspace = null; planData = null; newSecret = null; newCodes = null; challenge = null; leads = { calls: [], replies: [] }; $('#content').replaceChildren();
+ requestId++; workspace = null; planData = null; receptionistData = null; newSecret = null; newCodes = null; challenge = null; leads = { calls: [], replies: [] }; $('#content').replaceChildren();
  $('#twofa-form').hidden = true;
  $('#app').hidden = true; $('#auth-screen').hidden = false; $('#signin-form').hidden = false; $('#join-form').hidden = true;
  $('#auth-title').textContent = 'Welcome back.'; $('#auth-description').textContent = 'Sign in to pick up where you left off.';
@@ -60,8 +60,9 @@ function navigate(next) {
 function render() {
  $('#page-title').textContent = titles[view]; $('#page-kicker').textContent = labels[view];
  document.querySelectorAll('nav button').forEach(b => { b.classList.toggle('active', b.dataset.view === view); if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
- $('#content').innerHTML = ({ home, inbox, business, plan, preferences, install })[view]();
+ $('#content').innerHTML = ({ home, inbox, business, receptionist, plan, preferences, install })[view]();
  if (view === 'plan' && !planData) loadPlan();
+ if (view === 'receptionist' && !receptionistData) loadReceptionist();
  bindForms();
 }
 async function loadPlan() {
@@ -125,6 +126,38 @@ function business() {
  return `<div class="settings-stack"><section class="card"><h2>Your business, at a glance.</h2><p class="section-intro">Keep your business name and time zone current. Appointments are scheduled through the connected calendar.</p><form id="business-form"><div class="form-grid"><label>Business name<input name="name" value="${esc(b.name)}" required maxlength="80" autocomplete="organization"></label><label>Primary contact name<input name="contact_name" value="${esc(b.contact_name || workspace.user.display_name)}" required maxlength="80" autocomplete="name"></label><label class="full">Booking page <span class="muted small">Optional · your existing HTTPS scheduling link</span><input name="booking_url" type="url" value="${esc(b.booking_url || '')}" placeholder="https://your-business.com/book" maxlength="2048"></label><label class="full">Business time zone<select name="timezone">${timezones.map(t => `<option ${t === b.timezone ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label></div><div class="form-footer"><p>${b.onboarding_completed_at ? 'Changes apply to your workspace.' : 'Saving completes your business profile.'}</p><button class="primary" type="submit">${b.onboarding_completed_at ? 'Save business details' : 'Save & complete profile'}</button></div></form></section>
  <section class="card"><h2>Keep your calls moving.</h2><p class="section-intro">Review how each HootOwl number handles incoming calls. Text messaging is disabled.</p>${workspace.routes.length ? workspace.routes.map(r => `<div class="route"><div class="route-head"><div><p class="eyebrow">YOUR HOOTOWL NUMBER</p><strong>${esc(r.twilio_number)}</strong></div>${badge(r.is_active ? 'Routing active' : 'Routing paused', !r.is_active)}</div><form data-route="${esc(r.id)}"><label>Forward incoming calls to<input name="destination_number" type="tel" autocomplete="tel" pattern="\+[1-9][0-9]{1,14}" ${r.intake_enabled ? '' : 'required'} value="${esc(r.destination_number||'')}"></label><button type="submit" class="secondary">Save number</button></form><p class="small muted">AI voice answering: ${r.is_active && r.intake_enabled ? 'enabled' : 'not enabled'}.</p></div>`).join('') : empty('Your number comes next.', 'HootOwl will connect your business number. You can finish your profile and personalize your workspace now.')}</section></div>`;
 }
+async function loadReceptionist() {
+ try { receptionistData = await api('/receptionist'); if (view === 'receptionist') render(); }
+ catch (error) { feedback(error.message, true); }
+}
+function receptionist() {
+ if (!receptionistData) return `<section class="card"><p class="muted">Loading your AI receptionist…</p></section>`;
+ const d = receptionistData, name = workspace.business.name;
+ const p = d.profile || { assistant_name: '', business_name: name, name_only_when_asked: true, started_on: '', greeting: `Thanks for calling ${name}. How can we help you today?`,
+  closing_line: '', services: '', service_area_label: '', service_radius_miles: 50, place_hints: '', voice_id: d.voices[0].id, ready: false };
+ const voices = d.voices.some(v => v.id === p.voice_id) ? d.voices : [{ id: p.voice_id, name: 'Your current voice', description: 'Set up for you by HootOwl' }, ...d.voices];
+ const aiOn = d.routes.some(r => r.is_active && r.intake_enabled);
+ const canPreview = !!d.profile && d.routes.some(r => r.destination_number);
+ const area = d.profile && !d.profile.has_service_center ? '<p class="muted small full">HootOwl sets your service area’s center point. Until it does, your assistant won’t turn callers away by distance.</p>' : '';
+ return `<div class="settings-stack"><section class="card"><div class="section-heading"><h2>Meet your AI receptionist.</h2>${badge(p.ready ? 'Ready to answer' : 'Not ready yet', !p.ready)}</div>
+ <p class="section-intro">Choose how your assistant greets callers, what it offers, and how it sounds. ${aiOn ? 'AI answering is on for your HootOwl number.' : 'HootOwl turns on AI answering for your number when your plan includes it. Until then, calls ring your phone.'}</p>
+ <form id="receptionist-form"><div class="form-grid">
+ <label>Assistant name<input name="assistant_name" value="${esc(p.assistant_name)}" required maxlength="60" placeholder="Cindy"></label>
+ <label>Business name, as it should be spoken<input name="business_name" value="${esc(p.business_name)}" required maxlength="120"></label>
+ <label class="full">Greeting <span class="muted small">The first thing every caller hears</span><textarea name="greeting" rows="2" required maxlength="300">${esc(p.greeting)}</textarea></label>
+ <label class="full">Closing line <span class="muted small">Said once a caller’s details are saved. Leave blank for a standard line.</span><textarea name="closing_line" rows="2" maxlength="300">${esc(p.closing_line)}</textarea></label>
+ <label class="full">Services you offer <span class="muted small">Optional</span><textarea name="services" rows="3" maxlength="1000" placeholder="Plumbing repairs, water heaters, drain cleaning">${esc(p.services)}</textarea></label>
+ <label>Service area<input name="service_area_label" value="${esc(p.service_area_label)}" maxlength="200" placeholder="Nocona, Texas"></label>
+ <label>Service radius in miles<input name="service_radius_miles" type="number" min="1" max="500" required value="${esc(p.service_radius_miles)}"></label>${area}
+ <label class="full">Local place names <span class="muted small">Optional · town names callers might say that are easy to mishear</span><textarea name="place_hints" rows="2" maxlength="600">${esc(p.place_hints)}</textarea></label>
+ <label>Start date <span class="muted small">Optional · used if a caller asks how long they’ve worked there</span><input name="started_on" type="date" value="${esc(p.started_on || '')}"></label>
+ <label class="check-inline"><input type="checkbox" name="name_only_when_asked" ${p.name_only_when_asked ? 'checked' : ''}> Only say the assistant’s name when a caller asks</label>
+ <fieldset class="full voice-picker"><legend>Voice</legend>${voices.map(v => `<label class="voice-option"><input type="radio" name="voice_id" value="${esc(v.id)}" ${v.id === p.voice_id ? 'checked' : ''} required><span><strong>${esc(v.name)}</strong><span class="muted small">${esc(v.description)}</span></span></label>`).join('')}</fieldset>
+ <label class="check-inline full"><input type="checkbox" name="ready" ${p.ready ? 'checked' : ''}> My receptionist is ready to answer calls</label>
+ </div><div class="form-footer"><p>Your assistant always follows HootOwl’s safety rules, never claims to be a person, and never sends texts.</p><button class="primary" type="submit">Save receptionist</button></div></form></section>
+ <section class="card"><h2>Hear it for yourself.</h2><p class="section-intro">We’ll call your forwarding phone from your HootOwl number so you can talk to your assistant just like a caller would. Save first to hear your latest changes. Preview calls left today: ${esc(d.previews_left)}.</p>
+ <button id="preview-call" class="secondary" ${canPreview && d.previews_left > 0 ? '' : 'disabled'}>✆ Call me to preview</button>${canPreview ? '' : '<p class="muted small">Save your receptionist and add a forwarding phone number on the Business page to use previews.</p>'}</section></div>`;
+}
 const options = (values, selected) => values.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
 function preferences() {
  const u = workspace.user;
@@ -145,6 +178,17 @@ function bindForms() {
  }
  if ($('#password-form')) $('#password-form').onsubmit = event => { event.preventDefault(); submit(event.target, data => api('/password', { method: 'POST', body: JSON.stringify(data) }), () => { event.target.reset(); feedback('Password updated. Your other sessions have been signed out.'); }).catch(error => feedback(error.message, true)); };
  document.querySelectorAll('form[data-route]').forEach(form => { form.onsubmit = event => { event.preventDefault(); submit(form, data => api('/routes/' + form.dataset.route, { method: 'PATCH', body: JSON.stringify(data) }), async () => { await refresh(); feedback('Call-forwarding number saved.'); }).catch(error => feedback(error.message, true)); }; });
+ if ($('#receptionist-form')) $('#receptionist-form').onsubmit = event => {
+  event.preventDefault(); const form = event.target;
+  submit(form, data => api('/receptionist', { method: 'PUT', body: JSON.stringify({ ...data, service_radius_miles: Number(data.service_radius_miles),
+   name_only_when_asked: form.elements.name_only_when_asked.checked, ready: form.elements.ready.checked }) }),
+   async () => { receptionistData = null; await loadReceptionist(); feedback('Your AI receptionist is saved.'); }).catch(error => feedback(error.message, true));
+ };
+ if ($('#preview-call')) $('#preview-call').onclick = async event => {
+  event.target.disabled = true;
+  try { const result = await api('/receptionist/preview', { method: 'POST', body: '{}' }); feedback(`Calling ${result.calling} now. Answer to talk to your assistant.`); receptionistData = null; await loadReceptionist(); }
+  catch (error) { feedback(error.message, true); event.target.disabled = false; }
+ };
  if ($('#install-now')) $('#install-now').onclick = async () => { try { await installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; render(); } catch { feedback('Use your browser menu to add HootOwl to your home screen.', true); } };
 }
 async function logout() { try { await api('/session', { method: 'DELETE' }); showLogin(); $('#signin-form').reset(); $('#auth-error').textContent = ''; } catch (error) { feedback(error.message, true); } }

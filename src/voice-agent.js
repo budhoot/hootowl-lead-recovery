@@ -55,8 +55,9 @@ async function loadCall(callSid, from, to) {
      JOIN client_phone_numbers p ON p.id=s.client_phone_number_id
      JOIN clients c ON c.id=p.client_id
      LEFT JOIN agent_profiles a ON a.client_id=c.id
-     WHERE s.call_sid=$1 AND s.caller_number=$2 AND p.twilio_number=$3
-       AND s.status='active'`,
+     WHERE s.call_sid=$1 AND s.status='active'
+       AND ((NOT s.is_preview AND s.caller_number=$2 AND p.twilio_number=$3)
+         OR (s.is_preview AND s.caller_number=$3 AND p.twilio_number=$2))`,
     [callSid, from, to],
   );
   return result.rows[0] || null;
