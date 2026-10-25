@@ -1,4 +1,9 @@
-// Sends authentication SMS from the HootOwl master Twilio account. Disabled unless SMS_SEND_ENABLED=true.
+// SIGN-IN CODES ONLY (see docs/sms-policy.md). This module exists for one purpose: the one-time codes of customer two-step verification
+// (src/routes/customer-2fa.js is its only caller). HootOwl never sends marketing, recovery, reminder or any other
+// text message, and the product is a calls-only AI receptionist. Do not use this module for anything else.
+// Sends authentication SMS from the HootOwl master Twilio account. Off by default: nothing is sent unless
+// SMS_SEND_ENABLED is exactly the string "true" (unset, empty or any other value means off).
+// setSender() replaces the sender and skips the flag; it exists for tests and must never be called from application code.
 let sender = null;
 function setSender(fn) { sender = fn; }
 
