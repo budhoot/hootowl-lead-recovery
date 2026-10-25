@@ -50,14 +50,17 @@ router.post('/automation',async(req,res)=>{
  let result=await billing.applyWixEvent({event_id:`${v.event}:${v.order_id}`,event_type:v.event,plan_id:v.plan_id,
   subscription_id:v.order_id,buyer_email:v.email,period_end:v.valid_until,occurred_at:new Date().toISOString()});
  const base=process.env.TWILIO_PUBLIC_BASE_URL;
- let onboardingLink=new URL('/portal/',base).toString(), invited=false;
+ let onboardingLink=new URL('/portal/',base).toString(), invited=false, purchase=null;
  // A Wix retry repeats the purchase; issuing a fresh link is right because the failed run never emailed the old one.
  if(v.event==='plan_purchased' && billing.isKnownPlan(v.plan_id)){
   const name=[v.first_name,v.last_name].filter(Boolean).join(' ')||v.email;
   const customer=await onboarding.ensureCustomer(v.email,name.slice(0,80));
   if(customer.invitation_path){ onboardingLink=new URL(customer.invitation_path,base).toString(); invited=true; }
+  purchase={clientId:customer.client_id,email:v.email,orderId:v.order_id,planId:v.plan_id,firstName:v.first_name,link:invited?onboardingLink:null};
   if(result.outcome==='unmatched'){ await billing.reconcileUnmatched(); result={...result,outcome:await billing.isSubscriptionActive(customer.client_id)?'applied':'unmatched'}; }
  }
  res.status(result.duplicate?200:202).json({accepted:true,duplicate:!!result.duplicate,outcome:result.outcome||null,invited,onboarding_link:onboardingLink});
+ // After the response, so mail can never slow or fail the Wix call. notifyPurchase catches its own errors.
+ if(purchase) require('../invitation-email').notifyPurchase(purchase).catch(()=>{});
 });
 module.exports=router;
