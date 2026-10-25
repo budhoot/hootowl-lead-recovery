@@ -2,6 +2,7 @@ const express = require('express');
 const twilio = require('twilio');
 const db = require('../db');
 const voiceAgent = require('../voice-agent');
+const agentProfile = require('../agent-profile');
 const provisioning = require('../provisioning');
 const usage = require('../usage');
 
@@ -86,8 +87,9 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
 
   try {
     const result = await db.query(
-      `SELECT p.id,p.destination_number,p.intake_enabled,c.name
+      `SELECT p.id,p.destination_number,p.intake_enabled,c.name,${agentProfile.PROFILE_COLUMNS}
        FROM client_phone_numbers p JOIN clients c ON c.id=p.client_id
+       LEFT JOIN agent_profiles a ON a.client_id=c.id
        WHERE p.twilio_number = $1 AND p.is_active = TRUE`,
       [twilioNumber],
     );
@@ -101,15 +103,17 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
       return sendTwiML(res, response);
     }
 
-    if (phoneNumber.intake_enabled) {
+    // AI answering needs a ready profile; until then a route with a forwarding number still rings the business.
+    if (phoneNumber.intake_enabled && !phoneNumber.agent_ready && !phoneNumber.destination_number) {
+      console.error('AI answering is enabled but the customer has no ready receptionist profile.');
+      response.say('This number is not configured yet. Please try again later.');
+      response.hangup();
+      return sendTwiML(res, response);
+    }
+
+    if (phoneNumber.intake_enabled && phoneNumber.agent_ready) {
       if (!callSid) {
         return res.status(400).json({ error: 'Twilio voice webhook is missing CallSid.' });
-      }
-      if (!process.env.TRIAL_TWILIO_NUMBER || twilioNumber !== process.env.TRIAL_TWILIO_NUMBER) {
-        console.error('The intake route does not match TRIAL_TWILIO_NUMBER.');
-        response.say('This number is not configured yet. Please try again later.');
-        response.hangup();
-        return sendTwiML(res, response);
       }
       const relayUrl = voiceAgent.websocketUrl(process.env.TWILIO_PUBLIC_BASE_URL);
       await db.query(
@@ -130,13 +134,14 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
         action: callbackUrl('/webhooks/twilio/conversation-ended'),
         method: 'POST',
       });
+      const relay = agentProfile.relaySettings(phoneNumber);
       connect.conversationRelay({
         url: relayUrl,
-        welcomeGreeting: voiceAgent.GREETING,
+        welcomeGreeting: relay.welcomeGreeting,
         welcomeGreetingInterruptible: 'any',
         language: 'en-US',
-        ttsProvider: process.env.OWL_TTS_PROVIDER || 'ElevenLabs',
-        voice: process.env.OWL_TTS_VOICE || 'UgBBYS2sOqTuMpoF3BR0',
+        ttsProvider: relay.ttsProvider,
+        voice: relay.voice,
       });
       return sendTwiML(res, response);
     }

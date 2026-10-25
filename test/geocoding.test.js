@@ -50,6 +50,17 @@ describe('Google address verification', () => {
     await expect(geocodeServiceAddress('1 Main St', at(35.345, -97.64))).resolves.toEqual({ status: 'outside_area' });
   });
 
+  it('uses a customer\'s own service center and radius when given', async () => {
+    const austin = { latitude: 30.2672, longitude: -97.7431, radiusMiles: 30 };
+    const at = (lat, lng) => jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'OK', results: [{ ...validResult.results[0], geometry: { location: { lat, lng } } }] }),
+    });
+    // Round Rock is about 17 miles from downtown Austin; Nocona Hills is far outside 30 miles.
+    await expect(geocodeServiceAddress('1 Main St', at(30.5083, -97.6789), austin)).resolves.toEqual({ status: 'inside_area' });
+    await expect(geocodeServiceAddress('1 Main St', at(33.845, -97.64), austin)).resolves.toEqual({ status: 'outside_area' });
+  });
+
   it('does not accept a ZIP-only match or a partial result', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,

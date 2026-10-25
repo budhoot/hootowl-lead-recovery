@@ -36,22 +36,24 @@ function isInNoconaHills(longitude, latitude) {
   return inside;
 }
 
-// Service calls are made within this many straight-line miles of Nocona Hills, TX.
+// Default service area (the original Nocona Hills customer): straight-line miles from Nocona Hills, TX.
 const SERVICE_BASE = { latitude: 33.8456, longitude: -97.6399 };
 const SERVICE_RADIUS_MILES = 100;
 
-function milesFromBase(longitude, latitude) {
+function milesFromBase(longitude, latitude, base = SERVICE_BASE) {
   const toRadians = (degrees) => (degrees * Math.PI) / 180;
-  const dLat = toRadians(latitude - SERVICE_BASE.latitude);
-  const dLng = toRadians(longitude - SERVICE_BASE.longitude);
+  const dLat = toRadians(latitude - base.latitude);
+  const dLng = toRadians(longitude - base.longitude);
   const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(SERVICE_BASE.latitude)) * Math.cos(toRadians(latitude)) * Math.sin(dLng / 2) ** 2;
+    Math.cos(toRadians(base.latitude)) * Math.cos(toRadians(latitude)) * Math.sin(dLng / 2) ** 2;
   return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function isWithinServiceRadius(longitude, latitude) {
+// `area` is a customer's { latitude, longitude, radiusMiles }; without one, the original Nocona Hills area applies.
+function isWithinServiceRadius(longitude, latitude, area) {
   if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false;
-  return milesFromBase(longitude, latitude) <= SERVICE_RADIUS_MILES;
+  const base = area || SERVICE_BASE;
+  return milesFromBase(longitude, latitude, base) <= (area?.radiusMiles || SERVICE_RADIUS_MILES);
 }
 
-module.exports = { SERVICE_RADIUS_MILES, isInNoconaHills, isWithinServiceRadius, milesFromBase };
+module.exports = { SERVICE_BASE, SERVICE_RADIUS_MILES, isInNoconaHills, isWithinServiceRadius, milesFromBase };

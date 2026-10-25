@@ -1,6 +1,6 @@
 const { isWithinServiceRadius } = require('./service-area');
 
-async function geocodeServiceAddress(address, fetchImpl = global.fetch) {
+async function geocodeServiceAddress(address, fetchImpl = global.fetch, area) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) throw new Error('Google Maps Geocoding is not configured.');
 
@@ -28,7 +28,7 @@ async function geocodeServiceAddress(address, fetchImpl = global.fetch) {
   ) {
     return { status: 'not_found' };
   }
-  if (!isWithinServiceRadius(location.lng, location.lat)) return { status: 'outside_area' };
+  if (!isWithinServiceRadius(location.lng, location.lat, area)) return { status: 'outside_area' };
   return { status: 'inside_area' };
 }
 

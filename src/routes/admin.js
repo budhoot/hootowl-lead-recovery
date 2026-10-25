@@ -33,6 +33,36 @@ router.patch('/phone-numbers/:id',async(req,res)=>{
  if(!result.rowCount) return res.sendStatus(404);
  res.json(result.rows[0]);
 });
+const text=(min,max)=>z.string().trim().min(min).max(max);
+const profileSchema=z.object({assistant_name:text(1,60),business_name:text(1,120),name_only_when_asked:z.boolean().default(true),
+ started_on:z.union([z.literal(''),z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).default(''),greeting:text(1,300),closing_line:text(0,300).default(''),
+ services:text(0,1000).default(''),service_latitude:z.number().min(-90).max(90).nullable().default(null),
+ service_longitude:z.number().min(-180).max(180).nullable().default(null),service_radius_miles:z.number().int().min(1).max(500).default(100),
+ service_area_label:text(0,200).default(''),place_hints:text(0,600).default(''),tts_provider:z.enum(['ElevenLabs','Google','Amazon']).default('ElevenLabs'),
+ voice_id:z.union([z.literal(''),z.string().regex(/^[A-Za-z0-9._-]{1,100}$/)]).default(''),ready:z.boolean().default(false)})
+ .strict().refine(v=>(v.service_latitude===null)===(v.service_longitude===null));
+router.get('/agent-profiles/:clientId',async(req,res)=>{
+ if(!/^[1-9][0-9]*$/.test(req.params.clientId)) return res.sendStatus(400);
+ const row=(await db.query(`SELECT *,to_char(started_on,'YYYY-MM-DD') AS started_on FROM agent_profiles WHERE client_id=$1`,[req.params.clientId])).rows[0];
+ if(!row) return res.sendStatus(404); res.json(row);
+});
+router.put('/agent-profiles/:clientId',async(req,res)=>{
+ const parsed=profileSchema.safeParse(req.body);
+ if(!parsed.success||!/^[1-9][0-9]*$/.test(req.params.clientId)) return res.status(400).json({error:'Invalid receptionist profile.'});
+ const v=parsed.data;
+ if(!(await db.query('SELECT 1 FROM clients WHERE id=$1',[req.params.clientId])).rowCount) return res.sendStatus(404);
+ const row=(await db.query(`INSERT INTO agent_profiles(client_id,assistant_name,business_name,name_only_when_asked,started_on,greeting,closing_line,services,
+ service_latitude,service_longitude,service_radius_miles,service_area_label,place_hints,tts_provider,voice_id,ready)
+ VALUES($1,$2,$3,$4,NULLIF($5,'')::date,$6,$7,$8,$9,$10,$11,$12,$13,$14,NULLIF($15,''),$16)
+ ON CONFLICT(client_id) DO UPDATE SET assistant_name=EXCLUDED.assistant_name,business_name=EXCLUDED.business_name,
+ name_only_when_asked=EXCLUDED.name_only_when_asked,started_on=EXCLUDED.started_on,greeting=EXCLUDED.greeting,closing_line=EXCLUDED.closing_line,
+ services=EXCLUDED.services,service_latitude=EXCLUDED.service_latitude,service_longitude=EXCLUDED.service_longitude,
+ service_radius_miles=EXCLUDED.service_radius_miles,service_area_label=EXCLUDED.service_area_label,place_hints=EXCLUDED.place_hints,
+ tts_provider=EXCLUDED.tts_provider,voice_id=EXCLUDED.voice_id,ready=EXCLUDED.ready,updated_at=NOW()
+ RETURNING client_id,ready`,[req.params.clientId,v.assistant_name,v.business_name,v.name_only_when_asked,v.started_on,v.greeting,v.closing_line,
+  v.services,v.service_latitude,v.service_longitude,v.service_radius_miles,v.service_area_label,v.place_hints,v.tts_provider,v.voice_id,v.ready])).rows[0];
+ res.json(row);
+});
 router.get('/voice-sessions',async(req,res)=>res.json((await db.query(`SELECT s.call_sid,s.caller_number,s.call_started_at,s.status,s.customer_name,s.service_type,
  s.service_address,s.issue_description,s.risk_flag,s.address_verified,s.callback_requested,s.booked_start,c.name
  FROM voice_agent_sessions s JOIN client_phone_numbers p ON p.id=s.client_phone_number_id JOIN clients c ON c.id=p.client_id

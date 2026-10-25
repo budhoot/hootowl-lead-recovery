@@ -64,13 +64,16 @@ describe('Twilio voice webhooks', () => {
   });
 
   it('records and connects an intake call to the voice agent after the ring delay', async () => {
-    process.env.TRIAL_TWILIO_NUMBER = '+19403405234';
     db.query.mockResolvedValueOnce({
       rows: [{
         id: '12',
         destination_number: null,
         intake_enabled: true,
         name: 'Nocona Hills Repair & Replace',
+        agent_ready: true,
+        agent_greeting: 'Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?',
+        agent_tts_provider: 'ElevenLabs',
+        agent_voice_id: 'voice-for-nocona',
       }],
     }).mockResolvedValueOnce({ rowCount: 1 });
 
@@ -91,9 +94,44 @@ describe('Twilio voice webhooks', () => {
     expect(response.text).toContain('<ConversationRelay');
     expect(response.text).toContain('wss://api.example.test/webhooks/twilio/agent');
     expect(response.text).toContain('Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?');
+    expect(response.text).toContain('voice="voice-for-nocona"');
     expect(response.text).not.toContain('<Dial');
     expect(response.text).not.toContain('<Message');
+    expect(db.query.mock.calls[0][0]).toContain('LEFT JOIN agent_profiles');
     expect(db.query.mock.calls[1][0]).toContain('INSERT INTO voice_agent_sessions');
+  });
+
+  it('answers any customer number with that customer\'s own greeting and voice', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{
+        id: '40', destination_number: null, intake_enabled: true, name: 'Second Business',
+        agent_ready: true, agent_greeting: 'Thanks for calling Second Business!', agent_tts_provider: 'Google', agent_voice_id: 'second-voice',
+      }],
+    }).mockResolvedValueOnce({ rowCount: 1 });
+    const response = await signedPost('/webhooks/twilio/voice', { CallSid: 'CA-second', From: '+19405550100', To: '+15125550199' });
+    expect(response.text).toContain('Thanks for calling Second Business!');
+    expect(response.text).toContain('ttsProvider="Google"');
+    expect(response.text).toContain('voice="second-voice"');
+  });
+
+  it('forwards instead of answering while a customer\'s AI profile is not ready', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ id: '41', destination_number: '+14155550123', intake_enabled: true, name: 'Not Ready Yet', agent_ready: false }],
+    });
+    const response = await signedPost('/webhooks/twilio/voice', { CallSid: 'CA-notready', From: '+19405550100', To: '+15125550198' });
+    expect(response.text).toContain('<Dial');
+    expect(response.text).toContain('+14155550123');
+    expect(response.text).not.toContain('<ConversationRelay');
+  });
+
+  it('says the number is not configured when AI is not ready and nothing to forward to', async () => {
+    db.query.mockResolvedValueOnce({
+      rows: [{ id: '42', destination_number: null, intake_enabled: true, name: 'Not Ready Yet', agent_ready: null }],
+    });
+    const response = await signedPost('/webhooks/twilio/voice', { CallSid: 'CA-none', From: '+19405550100', To: '+15125550197' });
+    expect(response.text).toContain('This number is not configured yet');
+    expect(response.text).not.toContain('<ConversationRelay');
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 
   it('does not expose an inbound SMS webhook', async () => {

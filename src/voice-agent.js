@@ -6,9 +6,9 @@ const { geocodeServiceAddress } = require('./geocoding');
 const { createBooking, isSlotAvailable, suggestSlots } = require('./google-calendar');
 const { formatSlot } = require('./booking');
 const { generateReply } = require('./openai-voice');
+const agentProfile = require('./agent-profile');
 
 const SOCKET_PATH = '/webhooks/twilio/agent';
-const GREETING = 'Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?';
 const UNVERIFIED_STEP = 'The details are saved. The address could not be checked automatically, so treat it as inside the service area.';
 const CALLBACK_STEP = 'The details are saved but online booking is unavailable right now. Tell the caller a team member will call them back to schedule. Do not offer appointment times.';
 
@@ -50,10 +50,11 @@ function validateUpgrade(request) {
 
 async function loadCall(callSid, from, to) {
   const result = await db.query(
-    `SELECT s.*,c.name
+    `SELECT s.*,c.name,${agentProfile.PROFILE_COLUMNS}
      FROM voice_agent_sessions s
      JOIN client_phone_numbers p ON p.id=s.client_phone_number_id
      JOIN clients c ON c.id=p.client_id
+     LEFT JOIN agent_profiles a ON a.client_id=c.id
      WHERE s.call_sid=$1 AND s.caller_number=$2 AND p.twilio_number=$3
        AND s.status='active'`,
     [callSid, from, to],
@@ -74,7 +75,8 @@ async function getCall(callSid) {
   return result.rows[0];
 }
 
-async function saveServiceRequest(callSid, args) {
+// `area` is the caller's business service area from its profile; without one the default area applies.
+async function saveServiceRequest(callSid, args, area) {
   const fields = [
     ['customer_name', 80],
     ['service_type', 160],
@@ -91,7 +93,7 @@ async function saveServiceRequest(callSid, args) {
   // If verification itself is unavailable, keep the lead and hand it to a person instead of losing it.
   let geocoding;
   try {
-    geocoding = await geocodeServiceAddress(address);
+    geocoding = await geocodeServiceAddress(address, undefined, area);
   } catch (error) {
     console.error('Address verification unavailable:', error.message);
     geocoding = { status: 'unavailable' };
@@ -101,7 +103,7 @@ async function saveServiceRequest(callSid, args) {
     return { ok: false, reason: 'Could not verify a full street address.' };
   }
   if (geocoding.status === 'outside_area') {
-    return { ok: false, reason: 'Address is outside the Nocona Hills service area; do not book.' };
+    return { ok: false, reason: 'Address is outside the service area; do not book.' };
   }
 
   const issue = args.issue_description.trim();
@@ -190,7 +192,8 @@ async function bookVisit(callSid, choice) {
     await connection.query('BEGIN');
     await connection.query(
       'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
-      ['voice-booking:' + process.env.TRIAL_TWILIO_NUMBER],
+      // One shared Google Calendar today, so every booking serializes on the same key.
+      ['voice-booking:calendar'],
     );
     const call = (await connection.query(
       'SELECT * FROM voice_agent_sessions WHERE call_sid=$1 AND status=$2 FOR UPDATE',
@@ -238,10 +241,10 @@ async function bookVisit(callSid, choice) {
   }
 }
 
-async function runTool(callSid, name, args) {
+async function runTool(callSid, name, args, area) {
   switch (name) {
     case 'save_service_request':
-      return saveServiceRequest(callSid, args);
+      return saveServiceRequest(callSid, args, area);
     case 'get_available_slots':
       return findCallSlots(callSid);
     case 'prepare_booking':
@@ -347,7 +350,9 @@ function handleConnection(socket) {
         const text = await generateReply(
           history,
           message.voicePrompt,
-          (name, args) => runTool(call.call_sid, name, args),
+          (name, args) => runTool(call.call_sid, name, args, agentProfile.serviceArea(call)),
+          global.fetch,
+          { instructions: agentProfile.buildInstructions(call) },
         );
         sendSpokenText(socket, text);
       } catch (error) {
@@ -388,7 +393,6 @@ function attachVoiceAgent(server) {
 }
 
 module.exports = {
-  GREETING,
   SOCKET_PATH,
   attachVoiceAgent,
   bookVisit,

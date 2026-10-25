@@ -36,13 +36,22 @@ Save the returned client and route IDs. List routes with GET `/admin/clients`. A
 
 ## AI voice answering and call recording
 
-The service uses Twilio ConversationRelay for live speech recognition and spoken responses. The first TwiML verb is a six-second `<Pause>`, which delays pickup; the call is then recorded in dual-channel mode and ConversationRelay plays: “Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?” The assistant, CindyLou Hoot, gives her name only when asked Twilio documents that an initial `<Pause>` delays pickup. Ring cadence varies by carrier, so six seconds approximates the second ring but cannot guarantee the same ring count on every network. See [Twilio’s `<Pause>` reference](https://www.twilio.com/docs/voice/twiml/pause).
+The service uses Twilio ConversationRelay for live speech recognition and spoken responses. The first TwiML verb is a six-second `<Pause>`, which delays pickup; the call is then recorded in dual-channel mode and ConversationRelay plays the customer's greeting from its AI receptionist profile (for Nocona Hills: “Hey thanks for calling Nocona Hills Repair and Replace. How can we assist you today?”; that assistant, CindyLou Hoot, gives her name only when asked). Twilio documents that an initial `<Pause>` delays pickup. Ring cadence varies by carrier, so six seconds approximates the second ring but cannot guarantee the same ring count on every network. See [Twilio’s `<Pause>` reference](https://www.twilio.com/docs/voice/twiml/pause).
 
-The AI can collect the caller's name, requested service, full street address, and issue details, validate the address against the Nocona Hills boundary, check Google Calendar, and book a 60-minute visit after the caller clearly confirms a time. The existing 10-minute travel buffer and 15-minute slot increments apply. It prioritizes visit starts within an hour of the call when possible and otherwise offers later openings. It confirms the booking verbally. The service does not send or respond to SMS. If anyone may be in immediate danger, the AI is instructed to tell them to call 911.
+The AI can collect the caller's name, requested service, full street address, and issue details, validate the address against that customer's service center and radius, check Google Calendar, and book a 60-minute visit after the caller clearly confirms a time. The existing 10-minute travel buffer and 15-minute slot increments apply. It prioritizes visit starts within an hour of the call when possible and otherwise offers later openings. It confirms the booking verbally. The service does not send or respond to SMS. If anyone may be in immediate danger, the AI is instructed to tell them to call 911.
 
-### Trial configuration
+### Per-customer AI receptionist profiles
 
-1. In `.env`, set `TRIAL_TWILIO_NUMBER=+19403405234`, `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the exact public HTTPS origin in `TWILIO_PUBLIC_BASE_URL`. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Keep all keys and tokens in `.env` or a production secret manager; do not commit them.
+Each customer has one row in `agent_profiles`: assistant name, business name, greeting, closing line, services,
+service center and radius, place-name hints, and voice. A number with `intake_enabled` is answered by the AI only
+when its customer's profile has `ready = true`; otherwise it forwards to the route's destination number, or says the
+number is not configured when there is none. Profile text is flattened and placed before fixed safety and honesty
+rules, which it cannot override. Operators manage profiles with `GET`/`PUT /admin/agent-profiles/:clientId`.
+Migration `009` carries the original Nocona Hills assistant over unchanged.
+
+### Configuration
+
+1. In `.env`, set `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the exact public HTTPS origin in `TWILIO_PUBLIC_BASE_URL`. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Keep all keys and tokens in `.env` or a production secret manager; do not commit them.
 2. In Twilio Console, complete ConversationRelay onboarding and accept its applicable AI/ML terms. Configure the number's Voice webhook to `POST https://YOUR-API/webhooks/twilio/voice`. Leave incoming SMS unconfigured. The API provides the secure relay endpoint at `wss://YOUR-API/webhooks/twilio/agent`.
 3. Enable the Google Calendar API and Google Maps Geocoding API in a Google Cloud project. Configure a server-side OAuth client and refresh token authorized with `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar.events.freebusy` scopes. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, and `GOOGLE_CALENDAR_ID` (usually `primary`). Restrict `GOOGLE_MAPS_API_KEY` to the Geocoding API and the server's allowed IPs where possible.
 4. Run `npm run db:migrate`, then register the intake-only route:
@@ -57,7 +66,8 @@ The AI can collect the caller's name, requested service, full street address, an
    Invoke-RestMethod -Method Post -Uri "https://YOUR-API/admin/clients" -Headers $headers -ContentType "application/json" -Body $body
    ```
 
-   The route does not require or dial a forwarding destination. Store the returned client and route IDs for operator follow-up.
+   The route does not require or dial a forwarding destination. Then save that customer's receptionist profile with
+   `PUT /admin/agent-profiles/<client id>` and `"ready": true`; until then an intake-only route is not answered.
 
 5. Test with a controlled phone: verify the exact greeting, recording completion in Twilio, rejection of an out-of-area address, calendar slot selection, and verbal booking confirmation. Recording metadata and the Twilio recording URL are stored in `voice_agent_sessions`; listen to recordings in the Twilio Console and restrict access there.
 
