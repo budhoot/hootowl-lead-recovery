@@ -10,6 +10,8 @@ const STATUS_BY_EVENT = {
   payment_refunded: 'refunded'
 };
 const EVENT_TYPES = Object.keys(STATUS_BY_EVENT);
+// Events that end an order. They are only applied when they name the order currently on the client's subscription row.
+const ORDER_SCOPED_EVENTS = ['plan_cancelled', 'plan_expired'];
 
 function allowedPlans() {
   return (process.env.WIX_PLAN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -49,6 +51,17 @@ async function applyWixEvent(event) {
 
   const clientId = await findClientByEmail(event.buyer_email);
   if (!clientId) return { duplicate: false, outcome: 'unmatched' };
+
+  // A cancel or expiry for an order other than the one now on the subscription row (for example the old order after an
+  // upgrade) must not cancel the current plan. Both ids are Wix order ids (the automation sends plan_order_id as subscription_id).
+  // When either id is missing the comparison is impossible and the event applies as before.
+  if (ORDER_SCOPED_EVENTS.includes(event.event_type) && event.subscription_id) {
+    const current = (await db.query('SELECT wix_subscription_id FROM billing_subscriptions WHERE client_id=$1', [clientId])).rows[0];
+    if (current && current.wix_subscription_id && current.wix_subscription_id !== event.subscription_id) {
+      await db.query(`UPDATE billing_events SET outcome='ignored', client_id=$1 WHERE source='wix' AND event_id=$2`, [clientId, event.event_id]);
+      return { duplicate: false, outcome: 'ignored', reason: 'superseded_order' };
+    }
+  }
 
   const status = STATUS_BY_EVENT[event.event_type];
   await db.query(
