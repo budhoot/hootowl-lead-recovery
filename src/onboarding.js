@@ -37,4 +37,24 @@ async function ensureCustomer(email, businessName, hours = 7 * 24) {
   }
 }
 
-module.exports = { ensureCustomer, issueInvite };
+// Logs a warning (never blocks, never throws) when the email an invitation registers with differs from the buyer email
+// on the client's billing subscription. A difference means later Wix events for the other address cannot be matched
+// to this account. Emails are masked in the log. Runs after the registration has committed, on its own connection.
+function maskEmail(email) {
+  const [local = '', domain = ''] = String(email).split('@');
+  return `${local.slice(0, 2)}***@${domain}`;
+}
+async function warnOnBuyerEmailMismatch(clientId, registeredEmail) {
+  try {
+    const row = (await db.query('SELECT buyer_email FROM billing_subscriptions WHERE client_id=$1', [clientId])).rows[0];
+    if (!row || !row.buyer_email) return false;
+    if (String(row.buyer_email).toLowerCase() === String(registeredEmail).toLowerCase()) return false;
+    console.warn(`BUYER EMAIL MISMATCH: client ${clientId} registered with ${maskEmail(registeredEmail)} but the Wix buyer email on its subscription is ${maskEmail(row.buyer_email)}. Wix events for the buyer address will not match this account until the emails agree.`);
+    return true;
+  } catch (error) {
+    console.error('Unable to check the buyer email:', error.message);
+    return false;
+  }
+}
+
+module.exports = { ensureCustomer, issueInvite, warnOnBuyerEmailMismatch };
