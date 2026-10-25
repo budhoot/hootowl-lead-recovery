@@ -23,6 +23,17 @@ app.use('/integrations/wix', require('./routes/wix'));
 app.use('/operator/session', require('./routes/session'));
 app.use('/operator', express.static(require('node:path').join(__dirname,'public')));
 app.get('/',(req,res)=>res.redirect('/operator/'));
+// Public marketing page embedded in the hootowl.net Wix site. It is the only page that may be framed, and only by
+// HootOwl and Wix hosts; it loads nothing but inline styles and its embedded logo.
+const marketingDir = require('node:path').join(__dirname, '..', 'marketing');
+const LANDING_FRAME_ANCESTORS = "'self' https://www.hootowl.net https://hootowl.net https://*.wixsite.com https://*.wix.com https://*.filesusr.com https://*.parastorage.com";
+app.get(['/landing', '/landing/'], (req, res) => {
+  res.removeHeader('X-Frame-Options');
+  res.set('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors ${LANDING_FRAME_ANCESTORS}`);
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(require('node:path').join(marketingDir, 'hootowl-landing-embed.html'));
+});
+app.use('/landing', express.static(marketingDir, { index: false, maxAge: '1d' }));
 app.get('/ready',async(req,res)=>{
  try { await require('./db').query('SELECT 1 FROM schema_migrations LIMIT 1');res.json({status:'ready'}); }
  catch { res.status(503).json({status:'unavailable'}); }
