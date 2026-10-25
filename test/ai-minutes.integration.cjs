@@ -34,7 +34,7 @@ test('ai minutes: metered, limited by plan, reset monthly, forwarded when used u
   await db.query(`INSERT INTO client_phone_numbers(client_id,twilio_number,destination_number,recovery_enabled,intake_enabled)
    VALUES($1,'+15125550199','+15125550100',FALSE,TRUE)`, [pro]);
   await db.query(`INSERT INTO agent_profiles(client_id,assistant_name,business_name,greeting,ready) VALUES($1,'Max','Pro Customer','Thanks for calling Pro Customer!',TRUE)`, [pro]);
-  assert.deepEqual(await usage.aiStatus(pro), { unlimited: false, allowance: 75, used: 0, remaining: 75, plan: 'THE AI OWL Receptionist Pro', source: 'plan' });
+  assert.deepEqual(await usage.aiStatus(pro), { unlimited: false, allowance: 75, used: 0, remaining: 75, plan: 'Receptionist Pro', source: 'plan' });
 
   // A 4.2-minute AI conversation is metered as 5 minutes, once, however often Twilio repeats the callback.
   assert.match((await call('CAmeter1')).text, /<ConversationRelay/);
