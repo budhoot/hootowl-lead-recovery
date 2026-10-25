@@ -34,7 +34,7 @@ test('ai minutes: metered, limited by plan, reset monthly, forwarded when used u
   await db.query(`INSERT INTO client_phone_numbers(client_id,twilio_number,destination_number,recovery_enabled,intake_enabled)
    VALUES($1,'+15125550199','+15125550100',FALSE,TRUE)`, [pro]);
   await db.query(`INSERT INTO agent_profiles(client_id,assistant_name,business_name,greeting,ready) VALUES($1,'Max','Pro Customer','Thanks for calling Pro Customer!',TRUE)`, [pro]);
-  assert.deepEqual(await usage.aiStatus(pro), { unlimited: false, allowance: 300, used: 0, remaining: 300, plan: 'THE AI OWL Receptionist Pro', source: 'plan' });
+  assert.deepEqual(await usage.aiStatus(pro), { unlimited: false, allowance: 75, used: 0, remaining: 75, plan: 'THE AI OWL Receptionist Pro', source: 'plan' });
 
   // A 4.2-minute AI conversation is metered as 5 minutes, once, however often Twilio repeats the callback.
   assert.match((await call('CAmeter1')).text, /<ConversationRelay/);
@@ -45,7 +45,7 @@ test('ai minutes: metered, limited by plan, reset monthly, forwarded when used u
   // Last month's minutes do not count; once this month's reach the allowance, calls forward to the business.
   await db.query(`INSERT INTO usage_ledger(client_id,kind,provider_sid,quantity,occurred_at) VALUES($1,'ai_voice','ai:old',500,NOW()-INTERVAL '40 days')`, [pro]);
   assert.equal((await usage.aiStatus(pro)).used, 5);
-  await db.query(`INSERT INTO usage_ledger(client_id,kind,provider_sid,quantity) VALUES($1,'ai_voice','ai:bulk',295)`, [pro]);
+  await db.query(`INSERT INTO usage_ledger(client_id,kind,provider_sid,quantity) VALUES($1,'ai_voice','ai:bulk',70)`, [pro]);
   assert.equal((await usage.aiStatus(pro)).remaining, 0);
   const forwarded = await call('CAover1');
   assert.match(forwarded.text, /<Dial[^>]*>\+15125550100<\/Dial>/); assert.doesNotMatch(forwarded.text, /ConversationRelay/);
@@ -60,12 +60,12 @@ test('ai minutes: metered, limited by plan, reset monthly, forwarded when used u
   await operator.post('/operator/session').send({ key: process.env.ADMIN_API_KEY });
   const allow = body => operator.patch(`/admin/customer-workspaces/${pro}/ai-allowance`).set('X-HootOwl-Request', 'operator').send(body);
   assert.equal((await allow({ unlimited: false, minutes: -1 })).status, 400);
-  assert.equal((await allow({ unlimited: false, minutes: 400 })).body.remaining, 100);
+  assert.equal((await allow({ unlimited: false, minutes: 400 })).body.remaining, 325);
   assert.match((await call('CAoverride')).text, /<ConversationRelay/);
   assert.equal((await allow({ unlimited: true, minutes: null })).body.unlimited, true);
   assert.equal((await allow({ unlimited: false, minutes: null })).body.source, 'plan');
   const listed = (await operator.get('/admin/customer-workspaces')).body.find(c => String(c.id) === String(pro));
-  assert.equal(listed.ai_minutes.allowance, 300);
+  assert.equal(listed.ai_minutes.allowance, 75);
 
   // A cancelled subscription has no AI minutes; previews are never metered.
   await db.query("UPDATE billing_subscriptions SET status='cancelled' WHERE client_id=$1", [pro]);
