@@ -24,7 +24,8 @@ describe('AI receptionist profiles', () => {
   it('keeps CindyLou Hoot\'s instructions for Nocona Hills', () => {
     const text = buildInstructions(nocona);
     expect(text).toContain('You are CindyLou Hoot, the AI voice receptionist for Nocona Hills Repair and Replace.');
-    expect(text).toContain('Only say your name if the caller asks for it.');
+    expect(text).toContain('Only say your name if the caller asks for it. When they ask, answer: "My name is CindyLou Hoot."');
+    expect(text).toContain('Save the caller\'s full name exactly as they said it, first and last.');
     expect(text).toContain('If asked how long you have worked there, you started on October 24, 2026.');
     expect(text).toContain('Service calls are made anywhere within 100 miles of Nocona Hills, Texas, including nearby Oklahoma.');
     expect(text).toContain('"Nokona", "Nikona", or "Knocona" mean Nocona, Texas.');
@@ -41,6 +42,7 @@ describe('AI receptionist profiles', () => {
     });
     expect(text).toContain('You are Max, the AI voice receptionist for Austin Air Pros.');
     expect(text).not.toContain('Only say your name');
+    expect(text).toContain('Introduce yourself as Max when it fits the conversation.');
     expect(text).not.toContain('Nocona');
     expect(text).toContain('within 40 miles of Austin, Texas.');
     expect(text).toContain('Services offered: AC repair and installation');
