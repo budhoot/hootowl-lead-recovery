@@ -1,5 +1,6 @@
 const db = require('./db');
 const { planFor } = require('./plans');
+const billing = require('./billing');
 
 // Twilio bills voice per started minute, so usage is recorded the same way.
 function billableMinutes(durationSeconds) {
@@ -31,13 +32,14 @@ async function recordAiSession(callSid) {
 
 // This calendar month's AI minutes (in the customer's time zone) against what its plan or override allows.
 async function aiStatus(clientId) {
-  const { rows } = await db.query(`SELECT c.ai_unlimited,c.ai_minutes_override,b.wix_plan_id,b.status,
+  const { rows } = await db.query(`SELECT c.ai_unlimited,c.ai_minutes_override,b.wix_plan_id,b.status,b.current_period_end,
     COALESCE((SELECT sum(u.quantity) FROM usage_ledger u WHERE u.client_id=c.id AND u.kind='ai_voice'
       AND u.occurred_at>=(date_trunc('month',NOW() AT TIME ZONE c.timezone) AT TIME ZONE c.timezone)),0)::float AS used
     FROM clients c LEFT JOIN billing_subscriptions b ON b.client_id=c.id WHERE c.id=$1`, [clientId]);
   const row = rows[0];
   if (!row) return { unlimited: false, allowance: 0, used: 0, remaining: 0, plan: null, source: 'none' };
-  const plan = row.status === 'active' ? planFor(row.wix_plan_id) : null;
+  // An active row whose paid period ended more than the grace ago gets no plan allowance, like a cancelled one.
+  const plan = billing.isEntitled(row.status, row.current_period_end) ? planFor(row.wix_plan_id) : null;
   const override = row.ai_minutes_override;
   const allowance = row.ai_unlimited ? null : override ?? (plan ? plan.aiMinutes : 0);
   return {
