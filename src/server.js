@@ -14,6 +14,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+app.use('/portal/api/captured', require('./routes/customer-captured'));
 app.use('/portal/api', require('./routes/customer'));
 app.use('/portal', express.static(require('node:path').join(__dirname, 'customer-public'), { maxAge: 0 }));
 app.use('/admin/customer-workspaces', require('./routes/customer-admin'));
