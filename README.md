@@ -51,7 +51,7 @@ Migration `009` carries the original Nocona Hills assistant over unchanged.
 
 ### AI minutes by plan
 
-`src/plans.js` maps each Wix plan to monthly AI minutes (WATCH 15, Receptionist Pro 75, Enterprise 100; archived
+`src/plans.js` maps each Wix plan to monthly AI minutes (WATCH 15, Receptionist Pro 75, Enterprise 200; archived
 AI Receptionist Plus 15 and Agent OWL 150). AI minutes are metered when a conversation ends, per started minute,
 and reset on the 1st in the customer's time zone; preview calls are not metered. Within its minutes a ready
 assistant answers; once they are used up, calls forward to the customer's phone until the next month (with no
