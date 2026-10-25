@@ -71,9 +71,30 @@ async function applyWixEvent(event) {
   return { duplicate: false, outcome: 'applied', status };
 }
 
+// Days of service kept after current_period_end while a renewal event may still be on its way. Default 7.
+// Set BILLING_PERIOD_GRACE_DAYS to a whole number of days, or to "off" to ignore the end date entirely.
+function periodGraceMs() {
+  const raw = (process.env.BILLING_PERIOD_GRACE_DAYS || '').trim().toLowerCase();
+  if (raw === 'off') return null;
+  const days = /^[0-9]+$/.test(raw) ? Number(raw) : 7;
+  return days * 86400000;
+}
+
+// A subscription is entitled to service when its status is active and its paid period has not ended by more than the grace.
+// No end date (null) means valid until cancelled, so only the status decides. Nothing is deleted or rewritten: the row keeps
+// saying active, and the next renewal event or purchase makes the subscription entitled again.
+function isEntitled(status, currentPeriodEnd, now = new Date()) {
+  if (status !== 'active') return false;
+  const grace = periodGraceMs();
+  if (grace === null || !currentPeriodEnd) return true;
+  const end = new Date(currentPeriodEnd).getTime();
+  if (!Number.isFinite(end)) return true;
+  return now.getTime() <= end + grace;
+}
+
 async function isSubscriptionActive(clientId) {
-  const { rows } = await db.query(`SELECT status FROM billing_subscriptions WHERE client_id=$1`, [clientId]);
-  return rows[0] ? rows[0].status === 'active' : false;
+  const { rows } = await db.query(`SELECT status,current_period_end FROM billing_subscriptions WHERE client_id=$1`, [clientId]);
+  return rows[0] ? isEntitled(rows[0].status, rows[0].current_period_end) : false;
 }
 
 // Operator re-run for an event that arrived before the buyer had a portal account.
@@ -91,4 +112,4 @@ async function reconcileUnmatched() {
   return { applied };
 }
 
-module.exports = { EVENT_TYPES, applyWixEvent, assertPlanConfig, isKnownPlan, isSubscriptionActive, reconcileUnmatched };
+module.exports = { EVENT_TYPES, applyWixEvent, assertPlanConfig, isEntitled, isKnownPlan, isSubscriptionActive, reconcileUnmatched };
