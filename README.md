@@ -49,6 +49,16 @@ number is not configured when there is none. Profile text is flattened and place
 rules, which it cannot override. Operators manage profiles with `GET`/`PUT /admin/agent-profiles/:clientId`.
 Migration `009` carries the original Nocona Hills assistant over unchanged.
 
+### AI minutes by plan
+
+`src/plans.js` maps each Wix plan to monthly AI minutes (WATCH 50, Receptionist Pro 300, Enterprise 500; archived
+AI Receptionist Plus 50 and Agent OWL 600). AI minutes are metered when a conversation ends, per started minute,
+and reset on the 1st in the customer's time zone; preview calls are not metered. Within its minutes a ready
+assistant answers; once they are used up, calls forward to the customer's phone until the next month (with no
+forwarding number, the assistant still answers). A customer's "Ready" switch turns AI answering on for its numbers.
+Operators can set `PATCH /admin/customer-workspaces/:id/ai-allowance` to unlimited or a custom monthly number;
+migration `011` makes Nocona Hills unlimited.
+
 ### Configuration
 
 1. In `.env`, set `OPENAI_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the exact public HTTPS origin in `TWILIO_PUBLIC_BASE_URL`. `OPENAI_MODEL` defaults to `gpt-4.1-mini`. Keep all keys and tokens in `.env` or a production secret manager; do not commit them.

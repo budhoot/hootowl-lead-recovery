@@ -3,17 +3,27 @@ const { z } = require('zod');
 const db = require('../db');
 const { requireOperator } = require('../auth');
 const { issueInvite: invite } = require('../onboarding');
+const usage = require('../usage');
 const router = express.Router();
 router.use(requireOperator, express.json({ limit: '8kb' }));
 const inviteSchema = z.object({ email: z.string().trim().email().max(254).transform(v => v.toLowerCase()) });
 router.get('/', async (req, res) => {
- res.json((await db.query(`SELECT c.id,c.name,c.onboarding_completed_at,
+ const rows = (await db.query(`SELECT c.id,c.name,c.onboarding_completed_at,
  (SELECT count(*) FROM customer_users u WHERE u.client_id=c.id) AS accounts,
  (SELECT count(*) FROM client_phone_numbers p WHERE p.client_id=c.id) AS phone_routes,
  COALESCE(b.status,'none') AS subscription_status, b.current_period_end,
  COALESCE(tp.status,'not_provisioned') AS twilio_status
  FROM clients c LEFT JOIN billing_subscriptions b ON b.client_id=c.id
- LEFT JOIN twilio_provisioning tp ON tp.client_id=c.id ORDER BY c.id DESC`)).rows);
+ LEFT JOIN twilio_provisioning tp ON tp.client_id=c.id ORDER BY c.id DESC`)).rows;
+ res.json(await Promise.all(rows.map(async row => ({ ...row, ai_minutes: await usage.aiStatus(row.id) }))));
+});
+// Operator override of a customer's monthly AI minutes: unlimited, a custom number, or back to the plan (minutes: null).
+router.patch('/:id/ai-allowance', async (req, res) => {
+ const parsed = z.object({ unlimited: z.boolean(), minutes: z.number().int().min(0).max(100000).nullable() }).strict().safeParse(req.body);
+ if (!parsed.success || !/^[1-9][0-9]*$/.test(req.params.id)) return res.status(400).json({ error: 'Send unlimited (true/false) and minutes (a whole number, or null for the plan).' });
+ const result = await db.query('UPDATE clients SET ai_unlimited=$2,ai_minutes_override=$3 WHERE id=$1', [req.params.id, parsed.data.unlimited, parsed.data.minutes]);
+ if (!result.rowCount) return res.sendStatus(404);
+ res.json(await usage.aiStatus(req.params.id));
 });
 router.get('/billing/unmatched', async (req, res) => {
  res.json((await db.query(`SELECT id,event_type,payload->>'buyer_email' AS buyer_email,payload->>'plan_id' AS plan_id,received_at

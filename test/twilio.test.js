@@ -114,6 +114,23 @@ describe('Twilio voice webhooks', () => {
     expect(response.text).toContain('voice="second-voice"');
   });
 
+  it('answers with AI within the month\'s plan minutes and forwards once they are used up', async () => {
+    const route = { id: '43', client_id: '9', destination_number: '+14155550123', intake_enabled: true, name: 'Pro Customer',
+      agent_ready: true, agent_greeting: 'Thanks for calling Pro Customer!', agent_voice_id: 'pro-voice' };
+    const status = used => ({ rows: [{ ai_unlimited: false, ai_minutes_override: null, wix_plan_id: 'db1024e0-f106-4c82-84c8-9fa6f96d06fa', status: 'active', used }] });
+
+    db.query.mockResolvedValueOnce({ rows: [route] }).mockResolvedValueOnce(status(299)).mockResolvedValueOnce({ rowCount: 1 });
+    const within = await signedPost('/webhooks/twilio/voice', { CallSid: 'CA-within', From: '+19405550100', To: '+15125550196' });
+    expect(within.text).toContain('<ConversationRelay');
+    expect(within.text).not.toContain('<Dial');
+
+    db.query.mockResolvedValueOnce({ rows: [route] }).mockResolvedValueOnce(status(300));
+    const over = await signedPost('/webhooks/twilio/voice', { CallSid: 'CA-over', From: '+19405550100', To: '+15125550196' });
+    expect(over.text).toContain('<Dial');
+    expect(over.text).toContain('+14155550123');
+    expect(over.text).not.toContain('<ConversationRelay');
+  });
+
   it('forwards instead of answering while a customer\'s AI profile is not ready', async () => {
     db.query.mockResolvedValueOnce({
       rows: [{ id: '41', destination_number: '+14155550123', intake_enabled: true, name: 'Not Ready Yet', agent_ready: false }],

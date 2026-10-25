@@ -5,6 +5,7 @@ const { hash } = require('../auth');
 const auth = require('../customer-auth');
 const twoFactor = require('./customer-2fa');
 const { VOICES: voices, isAllowedVoice } = require('../voices');
+const usage = require('../usage');
 const router = express.Router();
 router.use(express.json({ limit: '16kb' }), auth.protectWrite);
 const authLimit = require('express-rate-limit').rateLimit({ windowMs: 15 * 60000, limit: 30, message: { error: 'Too many attempts. Please wait 15 minutes before trying again.' } });
@@ -65,7 +66,7 @@ router.get('/subscription', async (req, res) => {
  const clientId = req.customer.client_id;
  const sub = (await db.query('SELECT status,current_period_end FROM billing_subscriptions WHERE client_id=$1', [clientId])).rows[0];
  const prov = (await db.query('SELECT status,last_error FROM twilio_provisioning WHERE client_id=$1', [clientId])).rows[0];
- res.json({ subscription: sub || { status: 'none' }, provisioning: prov ? { status: prov.status, failed: prov.status === 'failed' } : { status: 'not_started' }, usage_30_days: await require('../usage').summary(clientId) });
+ res.json({ subscription: sub || { status: 'none' }, provisioning: prov ? { status: prov.status, failed: prov.status === 'failed' } : { status: 'not_started' }, usage_30_days: await usage.summary(clientId) });
 });
 router.post('/provisioning', authLimit, async (req, res) => {
  const parsed = z.object({ consent: z.literal(true), area_code: z.string().regex(/^[2-9][0-9]{2}$/).optional() }).strict().safeParse(req.body);
@@ -99,7 +100,8 @@ router.get('/receptionist', async (req, res) => {
  services,service_radius_miles,service_area_label,place_hints,voice_id,ready,(service_latitude IS NOT NULL) AS has_service_center
  FROM agent_profiles WHERE client_id=$1`, [clientId])).rows[0] || null;
  const routes = (await db.query('SELECT id,twilio_number,destination_number,is_active,intake_enabled FROM client_phone_numbers WHERE client_id=$1 ORDER BY id', [clientId])).rows;
- res.json({ profile, voices, routes, previews_left: Math.max(0, PREVIEWS_PER_DAY - await previewsToday(clientId)) });
+ res.json({ profile, voices, routes, ai: await usage.aiStatus(clientId),
+  previews_left: Math.max(0, PREVIEWS_PER_DAY - await previewsToday(clientId)) });
 });
 // Customers edit what their assistant says and sounds like; the service center and AI answering stay with HootOwl.
 router.put('/receptionist', async (req, res) => {
@@ -120,6 +122,8 @@ router.put('/receptionist', async (req, res) => {
  place_hints=EXCLUDED.place_hints,tts_provider=EXCLUDED.tts_provider,voice_id=EXCLUDED.voice_id,ready=EXCLUDED.ready,updated_at=NOW()`,
  [clientId, v.assistant_name, v.business_name, v.name_only_when_asked, v.started_on, v.greeting, v.closing_line, v.services,
   v.service_area_label, v.service_radius_miles, v.place_hints, v.voice_id, v.ready]);
+ // "Ready" is the customer's AI switch: it turns AI answering on for their numbers (plan minutes still apply).
+ if (v.ready) await db.query('UPDATE client_phone_numbers SET intake_enabled=TRUE WHERE client_id=$1', [clientId]);
  res.json({ saved: true });
 });
 // Calls the customer's own forwarding phone from their HootOwl number so they can talk to their assistant.

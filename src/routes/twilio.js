@@ -87,7 +87,7 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
 
   try {
     const result = await db.query(
-      `SELECT p.id,p.destination_number,p.intake_enabled,c.name,${agentProfile.PROFILE_COLUMNS}
+      `SELECT p.id,p.client_id,p.destination_number,p.intake_enabled,c.name,${agentProfile.PROFILE_COLUMNS}
        FROM client_phone_numbers p JOIN clients c ON c.id=p.client_id
        LEFT JOIN agent_profiles a ON a.client_id=c.id
        WHERE p.twilio_number = $1 AND p.is_active = TRUE`,
@@ -111,7 +111,15 @@ router.post('/voice', express.urlencoded({ extended: false }), validateTwilioWeb
       return sendTwiML(res, response);
     }
 
+    // Within the month's AI minutes the assistant answers; past them the call rings the business instead.
+    // With nowhere to forward, the assistant still answers rather than drop the caller.
+    let answerWithAi = false;
     if (phoneNumber.intake_enabled && phoneNumber.agent_ready) {
+      answerWithAi = !phoneNumber.destination_number || usage.canUseAi(await usage.aiStatus(phoneNumber.client_id));
+      if (!answerWithAi) console.log('AI minutes for this month are used up; forwarding the call.');
+    }
+
+    if (answerWithAi) {
       if (!callSid) {
         return res.status(400).json({ error: 'Twilio voice webhook is missing CallSid.' });
       }
@@ -255,6 +263,7 @@ router.post('/conversation-ended', express.urlencoded({ extended: false }), vali
        WHERE call_sid=$1 AND status='active'`,
       [callSid],
     );
+    try { await usage.recordAiSession(callSid); } catch (error) { console.error('Unable to meter AI minutes:', error.code || error.name); }
     const response = createTwiML();
     response.hangup();
     return sendTwiML(res, response);

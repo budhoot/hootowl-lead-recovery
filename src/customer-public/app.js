@@ -136,11 +136,15 @@ function receptionist() {
  const p = d.profile || { assistant_name: '', business_name: name, name_only_when_asked: true, started_on: '', greeting: `Thanks for calling ${name}. How can we help you today?`,
   closing_line: '', services: '', service_area_label: '', service_radius_miles: 50, place_hints: '', voice_id: d.voices[0].id, ready: false };
  const voices = d.voices.some(v => v.id === p.voice_id) ? d.voices : [{ id: p.voice_id, name: 'Your current voice', description: 'Set up for you by HootOwl' }, ...d.voices];
- const aiOn = d.routes.some(r => r.is_active && r.intake_enabled);
+ const ai = d.ai, over = !ai.unlimited && ai.used >= ai.allowance;
+ const minutes = ai.unlimited ? 'Unlimited AI minutes.' : `AI minutes used this month: ${Math.round(ai.used)} of ${ai.allowance}.`;
+ const aiNote = !ai.unlimited && !ai.allowance ? 'Your plan doesn’t include AI answering, so calls ring your phone.'
+  : over ? 'You’ve used this month’s AI minutes, so calls ring your phone until the 1st.'
+  : p.ready ? 'Your receptionist answers your calls.' : 'Mark your receptionist ready to have it answer your calls.';
  const canPreview = !!d.profile && d.routes.some(r => r.destination_number);
  const area = d.profile && !d.profile.has_service_center ? '<p class="muted small full">HootOwl sets your service area’s center point. Until it does, your assistant won’t turn callers away by distance.</p>' : '';
  return `<div class="settings-stack"><section class="card"><div class="section-heading"><h2>Meet your AI receptionist.</h2>${badge(p.ready ? 'Ready to answer' : 'Not ready yet', !p.ready)}</div>
- <p class="section-intro">Choose how your assistant greets callers, what it offers, and how it sounds. ${aiOn ? 'AI answering is on for your HootOwl number.' : 'HootOwl turns on AI answering for your number when your plan includes it. Until then, calls ring your phone.'}</p>
+ <p class="section-intro">Choose how your assistant greets callers, what it offers, and how it sounds. <strong>${esc(minutes)}</strong> ${esc(aiNote)}</p>
  <form id="receptionist-form"><div class="form-grid">
  <label>Assistant name<input name="assistant_name" value="${esc(p.assistant_name)}" required maxlength="60" placeholder="Cindy"></label>
  <label>Business name, as it should be spoken<input name="business_name" value="${esc(p.business_name)}" required maxlength="120"></label>
@@ -153,7 +157,7 @@ function receptionist() {
  <label>Start date <span class="muted small">Optional · used if a caller asks how long they’ve worked there</span><input name="started_on" type="date" value="${esc(p.started_on || '')}"></label>
  <label class="check-inline"><input type="checkbox" name="name_only_when_asked" ${p.name_only_when_asked ? 'checked' : ''}> Only say the assistant’s name when a caller asks</label>
  <fieldset class="full voice-picker"><legend>Voice</legend>${voices.map(v => `<label class="voice-option"><input type="radio" name="voice_id" value="${esc(v.id)}" ${v.id === p.voice_id ? 'checked' : ''} required><span><strong>${esc(v.name)}</strong><span class="muted small">${esc(v.description)}</span></span></label>`).join('')}</fieldset>
- <label class="check-inline full"><input type="checkbox" name="ready" ${p.ready ? 'checked' : ''}> My receptionist is ready to answer calls</label>
+ <label class="check-inline full"><input type="checkbox" name="ready" ${p.ready ? 'checked' : ''}> My receptionist is ready — answer my calls with AI</label>
  </div><div class="form-footer"><p>Your assistant always follows HootOwl’s safety rules, never claims to be a person, and never sends texts.</p><button class="primary" type="submit">Save receptionist</button></div></form></section>
  <section class="card"><h2>Hear it for yourself.</h2><p class="section-intro">We’ll call your forwarding phone from your HootOwl number so you can talk to your assistant just like a caller would. Save first to hear your latest changes. Preview calls left today: ${esc(d.previews_left)}.</p>
  <button id="preview-call" class="secondary" ${canPreview && d.previews_left > 0 ? '' : 'disabled'}>✆ Call me to preview</button>${canPreview ? '' : '<p class="muted small">Save your receptionist and add a forwarding phone number on the Business page to use previews.</p>'}</section></div>`;

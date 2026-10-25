@@ -39,6 +39,8 @@ test('agent profiles: Nocona carried over, second customer answered with its own
 
   // A second customer: forwards until its profile is ready, then answers with its own greeting and voice.
   const second = (await db.query("INSERT INTO clients(name) VALUES('Austin Air Pros') RETURNING id")).rows[0].id;
+  // On Receptionist Pro, so it has AI minutes (customers without a plan forward instead).
+  await db.query("INSERT INTO billing_subscriptions(client_id,wix_plan_id,status) VALUES($1,'db1024e0-f106-4c82-84c8-9fa6f96d06fa','active')", [second]);
   await db.query(`INSERT INTO client_phone_numbers(client_id,twilio_number,destination_number,recovery_enabled,intake_enabled)
    VALUES($1,'+15125550199','+15125550100',FALSE,TRUE)`, [second]);
   assert.match((await voice('+15125550199', 'CAsecond1')).text, /<Dial[^>]*>\+15125550100<\/Dial>/);
