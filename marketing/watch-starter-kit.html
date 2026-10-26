@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HootOwl Voicemail WATCH Starter Kit</title>
+<style>
+  @page { size: Letter; margin: 0.6in 0.65in; }
+  :root { --forest: #173e35; --forest-deep: #0f2b25; --gold: #e0ad4a; --gold-soft: #f6ebd3; --ink: #17221f; --muted: #5d6b66; --line: #e3e0d6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", -apple-system, Roboto, Arial, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3 { margin: 0; line-height: 1.15; color: var(--forest-deep); }
+  h2 { font-size: 18pt; margin: 0 0 10px; }
+  h3 { font-size: 12.5pt; margin: 0 0 4px; }
+  p { margin: 0 0 8px; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .eyebrow { font-size: 8.5pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+
+  /* Cover */
+  .cover { background: linear-gradient(160deg, #24584b 0%, var(--forest) 45%, var(--forest-deep) 100%); color: #fff; border-radius: 18px; padding: 44px 42px; min-height: 8.9in; display: flex; flex-direction: column; }
+  .cover .badge { width: 132px; height: 132px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #fffdf7 0%, var(--gold-soft) 100%); box-shadow: 0 0 0 4px rgba(224,173,74,.6); display: grid; place-items: center; margin-bottom: 30px; }
+  .cover .logo { width: 108px; height: 106px; background: url("__LOGO__") center / contain no-repeat; }
+  .cover .eyebrow { color: var(--gold); }
+  .cover h1 { color: #fff; font-size: 36pt; margin-bottom: 14px; }
+  .cover .sub { font-size: 14pt; color: rgba(255,255,255,.85); max-width: 5.4in; }
+  .cover .plan { margin-top: auto; display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip { border: 1.5px solid rgba(224,173,74,.7); color: var(--gold); border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 10pt; }
+  .cover .foot { margin-top: 22px; font-size: 9.5pt; color: rgba(255,255,255,.7); }
+
+  /* Content */
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; break-inside: avoid; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .incl { display: flex; gap: 10px; align-items: flex-start; }
+  .incl .ic { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--gold-soft); color: var(--forest); display: grid; place-items: center; font-weight: 800; }
+  .steps { counter-reset: s; }
+  .step { display: flex; gap: 14px; break-inside: avoid; margin-bottom: 12px; }
+  .step::before { counter-increment: s; content: counter(s); flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--forest); color: #fff; font-weight: 800; display: grid; place-items: center; }
+  .step p { color: #2f3b37; margin-bottom: 4px; }
+  .where { display: inline-block; background: var(--gold-soft); color: var(--forest-deep); border-radius: 6px; padding: 1px 7px; font-size: 9.5pt; font-weight: 700; }
+  .script { background: #fbf8f1; border-left: 4px solid var(--gold); border-radius: 8px; padding: 10px 14px; margin: 6px 0 10px; font-style: italic; break-inside: avoid; }
+  .note { background: var(--gold-soft); border-radius: 10px; padding: 12px 14px; break-inside: avoid; }
+  ul { margin: 4px 0 8px; padding-left: 18px; } li { margin-bottom: 3px; }
+  .qa h3 { font-size: 11pt; margin-top: 10px; }
+  .qa p { color: #2f3b37; }
+  .check li { list-style: none; margin-left: -18px; }
+  .check li::before { content: "☐  "; color: var(--forest); font-weight: 700; }
+  .footer-line { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 9pt; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- Page 1: cover -->
+<section class="page">
+  <div class="cover">
+    <div class="badge"><div class="logo" role="img" aria-label="HootOwl logo"></div></div>
+    <p class="eyebrow">HootOwl · Voicemail WATCH</p>
+    <h1>Your Starter Kit</h1>
+    <p class="sub">Everything you need to get your AI receptionist answering your business calls, in about 15 minutes.</p>
+    <div class="plan"><span class="chip">$20 / month</span><span class="chip">15 AI minutes every month</span><span class="chip">Your own HootOwl number</span></div>
+    <p class="foot">Questions? Email info@hootowl.net · Your workspace: hootowl-lead-recovery-production.up.railway.app/portal</p>
+  </div>
+</section>
+
+<!-- Page 2: what's included + setup -->
+<section class="page">
+  <p class="eyebrow">Welcome aboard</p>
+  <h2>What your WATCH plan includes</h2>
+  <div class="grid2">
+    <div class="card incl"><div class="ic">☎</div><div><h3>Your own HootOwl number</h3><p>A business line in your area code when one is available. Put it on your website, truck and Google profile.</p></div></div>
+    <div class="card incl"><div class="ic">✎</div><div><h3>An AI receptionist</h3><p>Answers with your greeting and voice, collects each caller's name, address, service needed and problem, and saves it as a lead.</p></div></div>
+    <div class="card incl"><div class="ic">15</div><div><h3>15 AI minutes a month</h3><p>Resets on the 1st. When they're used, calls simply ring your phone until the next month.</p></div></div>
+    <div class="card incl"><div class="ic">↻</div><div><h3>Forwarding and a lead inbox</h3><p>Calls forward to your phone, and missed calls and leads are saved in your HootOwl workspace.</p></div></div>
+  </div>
+
+  <h2 style="margin-top:18px">Set up in six steps</h2>
+  <div class="steps">
+    <div class="step"><div><h3>Accept your invitation</h3><p>Open the welcome email from HootOwl and click your personal link. Create a password of at least 12 characters. <span class="where">Link works for 7 days</span></p></div></div>
+    <div class="step"><div><h3>Get your HootOwl number</h3><p>In your workspace, open <span class="where">Plan &amp; security</span>. Enter the area code you'd like, tick the consent box, and click <strong>Set up my phone number</strong>.</p></div></div>
+    <div class="step"><div><h3>Add the phone that should ring</h3><p>Open <span class="where">Business</span>. Under <em>Forward incoming calls to</em>, enter your cell number with country code, like +19405551234, and click <strong>Save number</strong>.</p></div></div>
+    <div class="step"><div><h3>Meet your AI receptionist</h3><p>Open <span class="where">AI receptionist</span>. Name your assistant, write your greeting and closing line (ideas on the next page), list your services and area, and pick one of six voices. Click <strong>Save receptionist</strong>.</p></div></div>
+    <div class="step"><div><h3>Hear it yourself</h3><p>Click <strong>Call me to preview</strong>. We call your phone so you can talk to your assistant like a customer would. Tweak and preview again until it sounds right.</p></div></div>
+    <div class="step"><div><h3>Go live</h3><p>Tick <strong>My receptionist is ready — answer my calls with AI</strong> and save. That's it: your HootOwl number is now answered for you.</p></div></div>
+  </div>
+</section>
+
+<!-- Page 3: scripts + minutes -->
+<section class="page">
+  <p class="eyebrow">Make it sound like you</p>
+  <h2>Greeting ideas</h2>
+  <p>Your greeting is the first thing every caller hears. Keep it short and friendly, and say your business name.</p>
+  <div class="script">"Thanks for calling Smith Plumbing! How can we help you today?"</div>
+  <div class="script">"Hi, you've reached Lone Star Heating and Air. What can we do for you?"</div>
+  <div class="script">"Hey, thanks for calling Red River Roofing. What's going on at your place today?"</div>
+
+  <h2 style="margin-top:14px">Closing line ideas</h2>
+  <p>Said after your assistant saves the caller's details. Only promise what you can deliver.</p>
+  <div class="script">"Thanks! We've got your details, and someone from our team will call you back shortly."</div>
+  <div class="script">"Perfect, you're all set. We'll call you back today to schedule your visit."</div>
+
+  <h2 style="margin-top:14px">How your 15 AI minutes work</h2>
+  <div class="card">
+    <ul>
+      <li>Your assistant answers calls to your HootOwl number while you have minutes left this month.</li>
+      <li>Each call uses its length in minutes, rounded up. A typical call takes 2 to 3 minutes, so 15 minutes covers about 5 to 7 calls.</li>
+      <li>Once they're used, calls ring your phone like normal call forwarding. Nobody hits a dead line.</li>
+      <li>Your minutes reset on the 1st of every month. You can see this month's minutes on your <span class="where">AI receptionist</span> page.</li>
+      <li>Preview calls you make to yourself don't use your minutes.</li>
+    </ul>
+  </div>
+  <div class="note"><strong>Need more minutes?</strong> Receptionist Pro includes 75 AI minutes a month, and Enterprise OWL includes 200. Upgrade any time on hootowl.net.</div>
+</section>
+
+<!-- Page 4: tips, FAQ, checklist -->
+<section class="page">
+  <p class="eyebrow">Get the most from HootOwl</p>
+  <h2>Five ways to get more calls</h2>
+  <ul>
+    <li><strong>Google Business Profile:</strong> make your HootOwl number your listed phone number.</li>
+    <li><strong>Your website and social pages:</strong> put the number at the top of every page.</li>
+    <li><strong>Truck, yard signs and invoices:</strong> one number everywhere, answered every time.</li>
+    <li><strong>Your old voicemail:</strong> record a short message pointing callers to your HootOwl number.</li>
+    <li><strong>Call back fast:</strong> check your workspace inbox and return every lead the same day.</li>
+  </ul>
+
+  <h2 style="margin-top:14px">Good to know</h2>
+  <div class="qa">
+    <h3>Will callers know they're talking to AI?</h3>
+    <p>Yes. Your assistant is friendly and natural, but it never claims to be a person. If someone asks, it says it's your virtual assistant.</p>
+    <h3>Does it text my customers?</h3>
+    <p>No. HootOwl handles phone calls only and never sends texts to your callers.</p>
+    <h3>Can it book appointments?</h3>
+    <p>It collects each caller's name, address, service and problem and saves them as a lead, so you can call back and set the time.</p>
+    <h3>What if someone has an emergency?</h3>
+    <p>If a caller mentions danger such as fire, smoke, a gas smell or sparks, your assistant tells them to hang up and call 911 first.</p>
+    <h3>How do I change my greeting or voice later?</h3>
+    <p>Any time, on your <span class="where">AI receptionist</span> page. Save, then use <strong>Call me to preview</strong> to hear the change.</p>
+  </div>
+
+  <h2 style="margin-top:14px">Your launch checklist</h2>
+  <ul class="check">
+    <li>Accepted my invitation and created my password</li>
+    <li>Set up my HootOwl phone number</li>
+    <li>Added the cell number that should ring</li>
+    <li>Saved my assistant's name, greeting, closing line and voice</li>
+    <li>Made a preview call and liked how it sounded</li>
+    <li>Ticked "ready" so my assistant answers calls</li>
+    <li>Put my HootOwl number on Google, my website and my truck</li>
+  </ul>
+  <div class="footer-line"><span>HootOwl · AI receptionist for home-service businesses</span><span>info@hootowl.net · hootowl.net</span></div>
+</section>
+
+</body>
+</html>
