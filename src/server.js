@@ -23,16 +23,18 @@ app.use('/integrations/wix', require('./routes/wix'));
 app.use('/operator/session', require('./routes/session'));
 app.use('/operator', express.static(require('node:path').join(__dirname,'public')));
 app.get('/',(req,res)=>res.redirect('/operator/'));
-// Public marketing page embedded in the hootowl.net Wix site. It is the only page that may be framed, and only by
-// HootOwl and Wix hosts; it loads nothing but inline styles and its embedded logo.
+// Public marketing pages embedded in the hootowl.net Wix site: the main landing page and one per plan. They are the
+// only pages that may be framed, and only by HootOwl and Wix hosts; they load nothing but inline styles and the logo.
 const marketingDir = require('node:path').join(__dirname, '..', 'marketing');
 const LANDING_FRAME_ANCESTORS = "'self' https://www.hootowl.net https://hootowl.net https://*.wixsite.com https://*.wix.com https://*.filesusr.com https://*.parastorage.com";
-app.get(['/landing', '/landing/'], (req, res) => {
+const landingPage = (file) => (req, res) => {
   res.removeHeader('X-Frame-Options');
   res.set('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors ${LANDING_FRAME_ANCESTORS}`);
   res.set('Cache-Control', 'public, max-age=300');
-  res.sendFile(require('node:path').join(marketingDir, 'hootowl-landing-embed.html'));
-});
+  res.sendFile(require('node:path').join(marketingDir, file));
+};
+app.get(['/landing', '/landing/'], landingPage('hootowl-landing-embed.html'));
+for (const plan of ['watch', 'pro', 'enterprise']) app.get([`/landing/${plan}`, `/landing/${plan}/`], landingPage(`plan-${plan}.html`));
 app.use('/landing', express.static(marketingDir, { index: false, maxAge: '1d' }));
 app.get('/ready',async(req,res)=>{
  try { await require('./db').query('SELECT 1 FROM schema_migrations LIMIT 1');res.json({status:'ready'}); }

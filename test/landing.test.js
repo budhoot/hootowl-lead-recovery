@@ -16,6 +16,20 @@ describe('public landing page', () => {
     expect(csp).not.toContain('script-src');
   });
 
+  it.each([
+    ['watch', '35700e0f-3c66-4ded-9505-032132e2cf67', '$20'],
+    ['pro', 'db1024e0-f106-4c82-84c8-9fa6f96d06fa', '$50'],
+    ['enterprise', '7a97db13-3c00-4e46-827b-ac5b18324344', '$100'],
+  ])('serves the %s plan page with buy buttons for that plan', async (plan, planId, price) => {
+    const response = await request(app).get('/landing/' + plan);
+    expect(response.status).toBe(200);
+    expect(response.headers['x-frame-options']).toBeUndefined();
+    expect(response.headers['content-security-policy']).toContain('frame-ancestors');
+    expect(response.text).toContain(price);
+    const checkout = 'https://www.hootowl.net/pricing-plans/plan-customization/' + planId;
+    expect(response.text.split(checkout).length - 1).toBe(3);
+  });
+
   it('serves the logo files and keeps every other page unframable', async () => {
     const logo = await request(app).get('/landing/hootowl-logo.webp');
     expect(logo.status).toBe(200);

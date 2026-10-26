@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>HootOwl Voicemail WATCH Starter Kit</title>
+<title>HootOwl {{NAME}} Starter Kit</title>
 <style>
   @page { size: Letter; margin: 0.6in 0.65in; }
   :root { --forest: #173e35; --forest-deep: #0f2b25; --gold: #e0ad4a; --gold-soft: #f6ebd3; --ink: #17221f; --muted: #5d6b66; --line: #e3e0d6; }
@@ -53,10 +53,10 @@
 <section class="page">
   <div class="cover">
     <div class="badge"><div class="logo" role="img" aria-label="HootOwl logo"></div></div>
-    <p class="eyebrow">HootOwl · Voicemail WATCH</p>
+    <p class="eyebrow">HootOwl · {{NAME}}</p>
     <h1>Your Starter Kit</h1>
     <p class="sub">Everything you need to get your AI receptionist answering your business calls, in about 15 minutes.</p>
-    <div class="plan"><span class="chip">$20 / month</span><span class="chip">15 AI minutes every month</span><span class="chip">Your own HootOwl number</span></div>
+    <div class="plan"><span class="chip">${{PRICE}} / month</span><span class="chip">{{MINUTES}} AI minutes every month</span><span class="chip">Your own HootOwl number</span></div>
     <p class="foot">Questions? Email info@hootowl.net · Your workspace: hootowl-lead-recovery-production.up.railway.app/portal</p>
   </div>
 </section>
@@ -64,11 +64,11 @@
 <!-- Page 2: what's included + setup -->
 <section class="page">
   <p class="eyebrow">Welcome aboard</p>
-  <h2>What your WATCH plan includes</h2>
+  <h2>What your {{SHORT}} plan includes</h2>
   <div class="grid2">
     <div class="card incl"><div class="ic">☎</div><div><h3>Your own HootOwl number</h3><p>A business line in your area code when one is available. Put it on your website, truck and Google profile.</p></div></div>
     <div class="card incl"><div class="ic">✎</div><div><h3>An AI receptionist</h3><p>Answers with your greeting and voice, collects each caller's name, address, service needed and problem, and saves it as a lead.</p></div></div>
-    <div class="card incl"><div class="ic">15</div><div><h3>15 AI minutes a month</h3><p>Resets on the 1st. When they're used, calls simply ring your phone until the next month.</p></div></div>
+    <div class="card incl"><div class="ic">{{MINUTES}}</div><div><h3>{{MINUTES}} AI minutes a month</h3><p>Resets on the 1st. When they're used, calls simply ring your phone until the next month.</p></div></div>
     <div class="card incl"><div class="ic">↻</div><div><h3>Forwarding and a lead inbox</h3><p>Calls forward to your phone, and missed calls and leads are saved in your HootOwl workspace.</p></div></div>
   </div>
 
@@ -97,17 +97,17 @@
   <div class="script">"Thanks! We've got your details, and someone from our team will call you back shortly."</div>
   <div class="script">"Perfect, you're all set. We'll call you back today to schedule your visit."</div>
 
-  <h2 style="margin-top:14px">How your 15 AI minutes work</h2>
+  <h2 style="margin-top:14px">How your {{MINUTES}} AI minutes work</h2>
   <div class="card">
     <ul>
       <li>Your assistant answers calls to your HootOwl number while you have minutes left this month.</li>
-      <li>Each call uses its length in minutes, rounded up. A typical call takes 2 to 3 minutes, so 15 minutes covers about 5 to 7 calls.</li>
+      <li>Each call uses its length in minutes, rounded up. A typical call takes 2 to 3 minutes, so {{MINUTES}} minutes covers {{CALLS}} calls.</li>
       <li>Once they're used, calls ring your phone like normal call forwarding. Nobody hits a dead line.</li>
       <li>Your minutes reset on the 1st of every month. You can see this month's minutes on your <span class="where">AI receptionist</span> page.</li>
       <li>Preview calls you make to yourself don't use your minutes.</li>
     </ul>
   </div>
-  <div class="note"><strong>Need more minutes?</strong> Receptionist Pro includes 75 AI minutes a month, and Enterprise OWL includes 200. Upgrade any time on hootowl.net.</div>
+  <div class="note">{{UPGRADE}}</div>
 </section>
 
 <!-- Page 4: tips, FAQ, checklist -->
