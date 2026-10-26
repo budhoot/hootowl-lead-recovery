@@ -78,6 +78,16 @@ const extraStyle = `<style>
   .minutes-box ul { margin: 0; padding-left: 20px; } .minutes-box li { margin-bottom: 8px; color: var(--muted); }
   .compare { margin-top: 18px; font-size: 14px; color: rgba(255,255,255,.75); }
   .compare a { color: var(--gold); }
+  /* Plan pages have less content than the main page, so they use roomier spacing within the same 2150px height. */
+  .hero { padding: 64px 0 66px; }
+  .mark { margin-bottom: 22px; }
+  section.block { padding: 56px 0; }
+  .section-head { margin-bottom: 26px; }
+  .closing { padding: 56px 0; }
+  .closing .wrap { grid-template-columns: 1fr; text-align: center; row-gap: 12px; }
+  .closing .logo-badge.large, .closing h2, .closing p, .closing .cta-row { grid-column: 1; grid-row: auto; margin-left: auto; margin-right: auto; justify-content: center; }
+  .closing .logo-badge.large { width: 96px; height: 96px; }
+  .closing .logo-badge.large .logo-art { width: 80px; height: 79px; }
 </style>`;
 
 const included = (p) => [
