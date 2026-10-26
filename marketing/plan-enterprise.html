@@ -6,8 +6,8 @@
 <title>HootOwl Enterprise OWL</title>
 <style>
   :root {
-    --forest: #173e35;
-    --forest-deep: #0f2b25;
+    --purple: #3f2f7d;
+    --purple-deep: #24184d;
     --gold: #e0ad4a;
     --gold-soft: #f6ebd3;
     --cream: #f7f4ec;
@@ -33,15 +33,15 @@
   h2 { font-size: clamp(28px, 4vw, 40px); }
   .btn { display: inline-flex; align-items: center; gap: 8px; padding: 15px 24px; border-radius: 999px; font-weight: 700; font-size: 15px; text-decoration: none; transition: transform .15s ease, background .15s ease; }
   .btn:hover { transform: translateY(-1px); }
-  .btn-primary { background: var(--gold); color: var(--forest-deep); }
+  .btn-primary { background: var(--gold); color: var(--purple-deep); }
   .btn-primary:hover { background: #ebc16e; }
   .btn-ghost { border: 1.5px solid rgba(255,255,255,.4); color: #fff; }
   .btn-ghost:hover { background: rgba(255,255,255,.08); }
-  .btn-dark { background: var(--forest); color: #fff; }
-  .btn-dark:hover { background: var(--forest-deep); }
+  .btn-dark { background: var(--purple); color: #fff; }
+  .btn-dark:hover { background: var(--purple-deep); }
 
   /* Hero */
-  .hero { background: radial-gradient(1200px 600px at 85% -10%, #24584b 0%, var(--forest) 45%, var(--forest-deep) 100%); color: #fff; padding: 72px 0 84px; overflow: hidden; }
+  .hero { background: radial-gradient(1200px 600px at 85% -10%, #5b47a8 0%, var(--purple) 45%, var(--purple-deep) 100%); color: #fff; padding: 72px 0 84px; overflow: hidden; }
   .hero .wrap { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
   .mark { display: inline-flex; align-items: center; gap: 14px; font-weight: 800; letter-spacing: .14em; font-size: 14px; margin-bottom: 30px; }
   .logo-badge { width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #fffdf7 0%, var(--gold-soft) 100%); box-shadow: 0 0 0 3px rgba(224,173,74,.55), 0 12px 30px -10px rgba(0,0,0,.5); display: grid; place-items: center; flex: none; }
@@ -62,7 +62,7 @@
   .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 0 rgba(224,173,74,.6); animation: pulse 1.8s infinite; }
   @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(224,173,74,0); } 100% { box-shadow: 0 0 0 0 rgba(224,173,74,0); } }
   .bubble { padding: 12px 15px; border-radius: 16px; font-size: 14px; margin-bottom: 10px; max-width: 88%; }
-  .bubble.ai { background: var(--gold); color: var(--forest-deep); border-bottom-left-radius: 5px; }
+  .bubble.ai { background: var(--gold); color: var(--purple-deep); border-bottom-left-radius: 5px; }
   .bubble.caller { background: rgba(255,255,255,.12); margin-left: auto; border-bottom-right-radius: 5px; }
   .bubble small { display: block; font-size: 11px; font-weight: 700; opacity: .65; margin-bottom: 3px; }
   .lead-saved { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: rgba(0,0,0,.18); font-size: 13px; display: flex; gap: 10px; align-items: center; }
@@ -74,30 +74,30 @@
   .section-head p { color: var(--muted); font-size: 17px; margin: 14px 0 0; }
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
   .step { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
-  .step::before { counter-increment: step; content: "0" counter(step); display: block; font-weight: 800; color: var(--forest); font-size: 13px; letter-spacing: .1em; margin-bottom: 18px; }
+  .step::before { counter-increment: step; content: "0" counter(step); display: block; font-weight: 800; color: var(--purple); font-size: 13px; letter-spacing: .1em; margin-bottom: 18px; }
   .step h3 { font-size: 19px; margin-bottom: 8px; }
   .step p { color: var(--muted); margin: 0; font-size: 15px; }
 
   .features { background: var(--paper); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px 28px; }
-  .feature .icon { width: 44px; height: 44px; border-radius: 12px; background: var(--gold-soft); color: var(--forest); display: grid; place-items: center; font-size: 20px; margin-bottom: 14px; }
+  .feature .icon { width: 44px; height: 44px; border-radius: 12px; background: var(--gold-soft); color: var(--purple); display: grid; place-items: center; font-size: 20px; margin-bottom: 14px; }
   .feature h3 { font-size: 17px; margin-bottom: 6px; }
   .feature p { color: var(--muted); margin: 0; font-size: 15px; }
 
   /* Pricing */
   .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
   .plan { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 30px 26px; display: flex; flex-direction: column; }
-  .plan.popular { border: 2px solid var(--forest); box-shadow: 0 18px 40px -22px rgba(23,62,53,.55); position: relative; }
-  .tag { position: absolute; top: -13px; left: 26px; background: var(--forest); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; }
+  .plan.popular { border: 2px solid var(--purple); box-shadow: 0 18px 40px -22px rgba(63,47,125,.55); position: relative; }
+  .tag { position: absolute; top: -13px; left: 26px; background: var(--purple); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; }
   .plan h3 { font-size: 18px; }
   .plan .who { color: var(--muted); font-size: 14px; margin: 6px 0 20px; min-height: 42px; }
   .price { font-size: 44px; font-weight: 800; letter-spacing: -.02em; }
   .price span { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-  .minutes { display: inline-block; margin: 12px 0 22px; padding: 6px 12px; border-radius: 999px; background: var(--gold-soft); color: var(--forest); font-weight: 700; font-size: 13px; }
+  .minutes { display: inline-block; margin: 12px 0 22px; padding: 6px 12px; border-radius: 999px; background: var(--gold-soft); color: var(--purple); font-weight: 700; font-size: 13px; }
   .plan ul { list-style: none; padding: 0; margin: 0 0 26px; flex: 1; }
   .plan li { padding: 8px 0 8px 26px; position: relative; font-size: 15px; border-top: 1px solid var(--line); }
   .plan li:first-child { border-top: 0; }
-  .plan li::before { content: "✓"; position: absolute; left: 0; color: var(--forest); font-weight: 900; }
+  .plan li::before { content: "✓"; position: absolute; left: 0; color: var(--purple); font-weight: 900; }
   .plan .btn { justify-content: center; }
   .fine { color: var(--muted); font-size: 13px; margin-top: 22px; text-align: center; }
 
@@ -106,12 +106,12 @@
   details { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin-bottom: 12px; }
   summary { cursor: pointer; font-weight: 700; font-size: 16px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: "+"; font-size: 22px; line-height: 1; color: var(--forest); }
+  summary::after { content: "+"; font-size: 22px; line-height: 1; color: var(--purple); }
   details[open] summary::after { content: "–"; }
   details p { color: var(--muted); margin: 12px 0 0; }
 
   /* Closing */
-  .closing { background: var(--forest); color: #fff; text-align: center; padding: 76px 0; }
+  .closing { background: var(--purple); color: #fff; text-align: center; padding: 76px 0; }
   .closing h2 { font-size: clamp(30px, 4.5vw, 44px); }
   .closing p { color: rgba(255,255,255,.8); font-size: 18px; margin: 16px auto 30px; max-width: 560px; }
   .closing .cta-row { justify-content: center; }
@@ -229,7 +229,7 @@
   .price-card ul { list-style: none; padding: 0; margin: 0 0 22px; }
   .price-card li { padding: 8px 0 8px 26px; position: relative; font-size: 15px; border-top: 1px solid var(--line); }
   .price-card li:first-child { border-top: 0; }
-  .price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--forest); font-weight: 900; }
+  .price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--purple); font-weight: 900; }
   .price-card .btn { width: 100%; justify-content: center; }
   .secure { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
   .minutes-box { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }

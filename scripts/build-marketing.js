@@ -71,7 +71,7 @@ const extraStyle = `<style>
   .price-card ul { list-style: none; padding: 0; margin: 0 0 22px; }
   .price-card li { padding: 8px 0 8px 26px; position: relative; font-size: 15px; border-top: 1px solid var(--line); }
   .price-card li:first-child { border-top: 0; }
-  .price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--forest); font-weight: 900; }
+  .price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--purple); font-weight: 900; }
   .price-card .btn { width: 100%; justify-content: center; }
   .secure { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
   .minutes-box { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
